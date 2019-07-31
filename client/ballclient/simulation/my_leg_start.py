@@ -28,14 +28,13 @@ class LegStart(object):
     def excute(self, msg):
         self.initialize_msg(msg)
         mLogger.info(msg["msg_data"]["map"])
-        self.create_short_path()
+        # self.create_short_path()
 
     def create_short_path(self):
         width = self.msg['msg_data']['map']['width']
         height = self.msg['msg_data']['map']['height']
         tol = width * height
         self.short_path = [[] * tol for _ in range(tol)]
-        
-        
+
 
 mLegStart = LegStart()

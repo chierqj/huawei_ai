@@ -2,7 +2,6 @@
 
 import logging
 import os
-from jsonformatter import JsonFormatter
 
 class Logger:
 
