@@ -115,3 +115,5 @@ null
 doc/*
 
 .vscode
+
+client/ballclient/log*
