@@ -16,7 +16,6 @@ print "teams:%s" % msg['msg_data']['teams']
 '''
 from ballclient.logger import mLogger
 
-
 class LegStart(object):
     def __init__(self):
         self.msg = ""
@@ -35,7 +34,6 @@ class LegStart(object):
         height = self.msg['msg_data']['map']['height']
         tol = width * height
         self.short_path = [[] * tol for _ in range(tol)]
-        
-        
+
 
 mLegStart = LegStart()
