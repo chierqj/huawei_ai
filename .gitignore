@@ -102,3 +102,14 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+
+# project
+ai/*
+ui/*
+server/*
+log/*
+submit/*
+
+null
+doc/*
