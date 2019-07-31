@@ -13,12 +13,12 @@ from ballclient.simulation.my_round import mRound
 from ballclient.simulation.my_leg_end import mLegEnd
 from ballclient.simulation.my_game_over import mGameOver
 
+
 def leg_start(msg):
     print("====== leg_start ======")
     try:
         mLegStart.excute(msg)
     except Exception as e:
-        # logging.info(str(e))
         print(e)
 
 
@@ -29,7 +29,6 @@ def round(msg):
         return mRound.get_result()
     except Exception as e:
         print(e)
-        # logging.info(str(e))
 
 
 def leg_end(msg):
@@ -37,7 +36,6 @@ def leg_end(msg):
     try:
         mLegEnd.excute(msg)
     except Exception as e:
-        # logging.info(str(e))
         print(e)
 
 
@@ -46,5 +44,4 @@ def game_over(msg):
     try:
         mGameOver.excute(msg)
     except Exception as e:
-        # logging.info(str(e))
         print(e)
