@@ -1,30 +1,8 @@
 # coding: utf-8
-
-'''
-:param msg: dict
-:return:
-return type: dict
-
-
-round_id = msg['msg_data']['round_id']
-players = msg['msg_data']['players']
-direction = {1: 'up', 2: 'down', 3: 'left', 4: 'right'}
-result = {
-    "msg_name": "action",
-    "msg_data": {
-        "round_id": round_id
-    }
-}
-action = []
-for player in players:
-    if player['team'] == constants.team_id:
-        action.append({"team": player['team'], "player_id": player['id'],
-                       "move": [direction[random.randint(1, 4)]]})
-return result
-'''
 from ballclient.auth import config
 from ballclient.simulation.my_leg_start import mLegStart
 import random
+from ballclient.logger import mLogger
 
 
 class Round(object):
@@ -87,7 +65,7 @@ class Round(object):
                 return move
         return move
 
-    def get_random_dir(self):
+    def get_random_move(self):
         return [self.direction[random.randint(1, 12317) % 4 + 1]]
 
     def get_move(self, px, py):
@@ -111,8 +89,8 @@ class Round(object):
             move = ['up']
         else:
             # 吃鱼or跑路
-            move = [self.direction[random.randint(1, 6772317) % 4 + 1]]
-            # move = self.run(px, py)
+            move = self.run(px, py)
+            # move = self.get_random_move()
         return move
 
     def make_action(self):
@@ -120,6 +98,7 @@ class Round(object):
             'round_id', None)
         if False == self.check_players:
             return
+
         players = self.msg['msg_data'].get('players', [])
         action = []
         for player in players:

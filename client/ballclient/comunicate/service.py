@@ -12,36 +12,33 @@ from ballclient.simulation.my_leg_start import mLegStart
 from ballclient.simulation.my_round import mRound
 from ballclient.simulation.my_leg_end import mLegEnd
 from ballclient.simulation.my_game_over import mGameOver
+from ballclient.logger import mLogger
 
 
 def leg_start(msg):
-    print("====== leg_start ======")
     try:
         mLegStart.excute(msg)
     except Exception as e:
-        print(e)
+        mLogger.error(e)
 
 
 def round(msg):
-    print("====== round ======")
     try:
         mRound.excute(msg)
         return mRound.get_result()
     except Exception as e:
-        print(e)
+        mLogger.error(e)
 
 
 def leg_end(msg):
-    print("====== leg_end ======")
     try:
         mLegEnd.excute(msg)
     except Exception as e:
-        print(e)
+        mLogger.error(e)
 
 
 def game_over(msg):
-    print("====== game over ======")
     try:
         mGameOver.excute(msg)
     except Exception as e:
-        print(e)
+        mLogger.error(e)

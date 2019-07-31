@@ -1,29 +1,4 @@
 # coding: utf-8
-'''
-:param msg:
-{
-    "msg_name" : "leg_end",
-    "msg_data" : {
-        "teams" : [
-        {
-            "id" : 1001,				#队ID
-            "point" : 770             #本leg的各队所得点数
-        },
-        {
-        "id" : 1002,
-        "point" : 450
-            }
-        ]
-    }
-}
-
-:return:
-teams = msg["msg_data"]['teams']
-for team in teams:
-    print "teams:%s" % team['id']
-    print "point:%s" % team['point']
-    print "\n\n"
-'''
 
 
 class LegEnd(object):

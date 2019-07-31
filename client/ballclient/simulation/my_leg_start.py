@@ -14,17 +14,28 @@ print "tunnel:%s" % msg['msg_data']['map']['tunnel']
 print "wormhole:%s" % msg['msg_data']['map']['wormhole']
 print "teams:%s" % msg['msg_data']['teams']
 '''
+from ballclient.logger import mLogger
 
 
 class LegStart(object):
     def __init__(self):
         self.msg = ""
+        self.short_path = []
 
     def initialize_msg(self, msg):
         self.msg = msg
 
     def excute(self, msg):
         self.initialize_msg(msg)
+        mLogger.info(msg["msg_data"]["map"])
+        self.create_short_path()
 
+    def create_short_path(self):
+        width = self.msg['msg_data']['map']['width']
+        height = self.msg['msg_data']['map']['height']
+        tol = width * height
+        self.short_path = [[] * tol for _ in range(tol)]
+        
+        
 
 mLegStart = LegStart()
