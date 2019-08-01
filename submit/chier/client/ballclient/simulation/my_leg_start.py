@@ -13,7 +13,7 @@ class LegStart(object):
         self.short_move = dict()
         self.wormhole = dict()
         self.tunnel_go = dict()
-        self.graph = []
+        self.graph = []    # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
         self.direction = ['down', 'up', 'right', 'left']
         self.tol_cells = 0
         self.fa = []
