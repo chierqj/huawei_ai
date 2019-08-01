@@ -2,7 +2,7 @@
 from ballclient.auth import config
 from ballclient.simulation.my_leg_start import mLegStart
 import random
-from ballclient.logger import mLogger
+from ballclient.utils.logger import mLogger
 from ballclient.utils.time_wapper import msimulog
 
 
@@ -16,17 +16,9 @@ class Round(object):
                 "actions": []
             }
         }
-
-        self.add = [[1, 0], [0, -1], [-1, 0], [0, 1], [0, 0]]
+        self.add = [(1, 0), (0, -1), (-1, 0), (0, 1), (0, 0)]
         self.direction = {1: 'right', 2: 'up', 3: 'left', 4: 'down'}
-
-    def initialize_msg(self, msg):
-        self.msg = msg
-
-    @msimulog()
-    def excute(self, msg):
-        self.initialize_msg(msg)
-        self.make_action()
+        self.beat = []
 
     def get_result(self):
         return self.result
@@ -43,66 +35,99 @@ class Round(object):
     def get_dis(self, x1, y1, x2, y2):
         return abs(x1 - x2) + abs(y1 - y2)
 
-    def judge(self, px, py):
-        if px < 0 or py < 0 or px >= mLegStart.msg['msg_data']['map']['width'] or py >= mLegStart.msg['msg_data']['map']['height']:
+    def initialize_msg(self, msg):
+        self.msg = msg
+
+    # 判断边界，True表示在边界内
+    def match_border(self, x, y):
+        if x < 0 or x >= mLegStart.msg['msg_data']['map']['width']:
             return False
-        for meteor in mLegStart.msg['msg_data']['map']['meteor']:
-            if meteor['x'] == px and meteor['y'] == py:
-                return False
+        if y < 0 or y >= mLegStart.msg['msg_data']['map']['height']:
+            return False
+        return True
+
+    # 判断是否为陨石，True表示为陨石，不能走
+    def match_meteor(self, px, py):
+        if mLegStart.get_graph_cell(px, py) == '#':
+            return True
+        return True
+
+    # 判断能不能被吃，True表示能被吃
+    def match_beat_eated(self, px, py):
         if self.msg['msg_data']['mode'] == "beat":
             for player in self.msg['msg_data']['players']:
                 if player['team'] != config.team_id:
-                    for xy in self.add:
-                        if player['x'] + xy[0] == px and player['y'] + xy[1] == py:
-                            return False
-            return True
-        else:
-            return True
+                    for x, y in self.add:
+                        if player['x'] + x == px and player['y'] + y == py:
+                            return True
+        return False
 
-    def run(self, px, py):
+    def judge(self, px, py):
+        if False == self.match_border(px, py):
+            return False
+        if True == self.match_meteor(px, py):
+            return False
+        if True == self.match_beat_eated(px, py):
+            return False
+        return True
+
+    def run(self, px, py, flag):
         move = ['']
+        add = 0
+        if flag == 1:
+            add = random.randint(1, 12317) % 4
         for i in range(0, 3):
-            if self.judge(px + self.add[i][0], py + self.add[i][1]) == True:
-                move = [self.direction[i + 1]]
-                return move
+            k = (i + add) % 4
+            dx, dy = px + self.add[k][0], py + self.add[k][1]
+            if self.judge(dx, dy) == True:
+                if move == ['']:
+                    move = [self.direction[k + 1]]
+                else:
+                    for wormhole in mLegStart.msg['msg_data']['map']['wormhole']:
+                        if wormhole['x'] == dx and wormhole['y'] == dy:
+                            move = [self.direction[k + 1]]
         return move
 
-    def get_random_move(self):
-        return [self.direction[random.randint(1, 12317) % 4 + 1]]
-
-    @msimulog()
-    def get_move(self, px, py):
-        for i in range(5):
-            for j in range(5):
-                mLogger.info('{}{}'.format(type(px), type(i)))
-                mv = mLegStart.get_short_move(px, py, i, j)
-                mLogger.info(mv)
-                # mLogger.info('({}, {})({}, {}){}'.format(px, py, i, j, mv))
-        move = ['']
-        if False == self.check_power():
-            # 没有power:1.找传送门 2.找鱼 3.跑路
-            move = self.run(px, py)  # 跑路
-            return move
-        powers = self.msg["msg_data"].get("power", [])
-        powers = sorted(powers, key=lambda it: self.get_dis(
-            it['x'], it['y'], px, py))
-        min_x, min_y = powers[0]['x'], powers[0]['y']
-
-        if px < min_x and self.judge(px + 1, py):
-            move = ['right']
-        elif px > min_x and self.judge(px - 1, py):
-            move = ['left']
-        elif py < min_y and self.judge(px, py + 1):
-            move = ['down']
-        elif py > min_y and self.judge(px, py - 1):
-            move = ['up']
+    # powers代表可以吃的东西
+    def get_direct(self, px, py, powers):
+        min_x, min_y = -1, -1
+        min_dis, min_dis2 = 961006, 961006
+        # 我可以吃人，我去吃距离最小的鱼
+        if self.msg['msg_data']['mode'] == "think":
+            for player in self.msg['msg_data']['players']:
+                if player['team'] != config.team_id:
+                    dis = self.get_dis(px, py, player['x'], player['y'])
+                    if min_dis > dis:
+                        min_dis, min_x, min_y = dis, player['x'], player['y']
+        if None == powers:
+            if min_x == -1:
+                return self.run(px, py, 1)
         else:
-            # 吃鱼or跑路
-            move = self.run(px, py)
-            # move = self.get_random_move()
+            powers = sorted(powers, key=lambda it: self.get_dis(
+                it['x'], it['y'], px, py))
+            # 离我最近的金币powers[0]， 距离min_dis2
+            min_dis2 = self.get_dis(powers[0]['x'], powers[0]['y'], px, py)
+        move = ['']
+        if min_dis2 < 5:
+            min_x, min_y = powers[0]['x'], powers[0]['y']
+        else:
+            return self.run(px, py, 1)
+
+        short_move = mLegStart.get_short_move(px, py, min_x, min_y)
+        if short_move == None:
+            mLogger.info("cant find move from ({}, {}) to ({}, {})".format(
+                px, py, min_x, min_y))
+            move = self.run(px, py, 1)
+        else:
+            move = [short_move]
         return move
 
-    @msimulog()
+    def get_move(self, px, py):
+        move = ['']
+        powers = self.msg["msg_data"].get("power", None)
+        move = self.get_direct(px, py, powers)
+        return move
+
     def make_action(self):
         self.result["msg_data"]["round_id"] = self.msg['msg_data'].get(
             'round_id', None)
@@ -123,6 +148,10 @@ class Round(object):
                     "move": move
                 })
         self.result['msg_data']['actions'] = action
+
+    def excute(self, msg):
+        self.initialize_msg(msg)
+        self.make_action()
 
 
 mRound = Round()

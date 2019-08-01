@@ -12,7 +12,7 @@ from ballclient.simulation.my_leg_start import mLegStart
 from ballclient.simulation.my_round import mRound
 from ballclient.simulation.my_leg_end import mLegEnd
 from ballclient.simulation.my_game_over import mGameOver
-from ballclient.logger import mLogger
+from ballclient.utils.logger import mLogger
 
 
 def leg_start(msg):

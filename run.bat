@@ -10,8 +10,8 @@ cd /d "ai"
 start gameclient.bat 1111 127.0.0.1 6001 
 popd
 
-rem sleep 5s
-ping -n 5 127.0.0.1>null
+rem sleep 3s
+ping -n 3 127.0.0.1>null
 
 pushd %CD%
 cd /d "client"
