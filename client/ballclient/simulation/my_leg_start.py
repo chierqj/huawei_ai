@@ -14,9 +14,7 @@ print "tunnel:%s" % msg['msg_data']['map']['tunnel']
 print "wormhole:%s" % msg['msg_data']['map']['wormhole']
 print "teams:%s" % msg['msg_data']['teams']
 '''
-# from ballclient.logger import mLogger
-
-
+from ballclient.logger import mLogger
 import json
 
 # msg = {u'msg_name': u'leg_start', u'msg_data': {u'map': {u'wormhole': [{u'y': 0, u'x': 19, u'name': u'A'}, {u'y': 6, u'x': 13, u'name': u'b'}, {u'y': 13, u'x': 6, u'name': u'a'}, {u'y': 19, u'x': 0, u'name': u'B'}], u'tunnel': [{u'y': 5, u'x': 5, u'direction': u'up'}, {u'y': 5, u'x': 6, u'direction': u'right'}, {u'y': 5, u'x': 7, u'direction': u'right'}, {u'y': 5, u'x': 8, u'direction': u'right'}, {u'y': 5, u'x': 9, u'direction': u'right'}, {u'y': 5, u'x': 10, u'direction': u'right'}, {u'y': 5, u'x': 11, u'direction': u'right'}, {u'y': 5, u'x': 12, u'direction': u'right'}, {u'y': 5, u'x': 13, u'direction': u'right'}, {u'y': 5, u'x': 14, u'direction': u'right'}, {u'y': 6, u'x': 5, u'direction': u'up'}, {u'y': 6, u'x': 14, u'direction': u'down'}, {u'y': 7, u'x': 5, u'direction': u'up'}, {u'y': 7, u'x': 14, u'direction': u'down'}, {u'y': 8, u'x': 5, u'direction': u'up'}, {u'y': 8, u'x': 14, u'direction': u'down'}, {u'y': 9, u'x': 5, u'direction': u'up'}, {u'y': 9, u'x': 14, u'direction': u'down'}, {u'y': 10, u'x': 5, u'direction': u'up'}, {u'y': 10, u'x': 14, u'direction': u'down'}, {u'y': 11, u'x': 5, u'direction': u'up'}, {u'y': 11, u'x': 14, u'direction': u'down'}, {u'y': 12, u'x': 5, u'direction': u'up'}, {
@@ -61,7 +59,7 @@ class LegStart(object):
         pid2 = self.get_cell_id(x2, y2)
         if self.short_move[pid1][pid2] == -1:
             return None
-        return self.direction[self.short_move[pid1][pid2]]
+        return self.directions[self.short_move[pid1][pid2]]
 
     def initialize_msg(self, msg):
         self.msg = msg
@@ -134,10 +132,10 @@ class LegStart(object):
     def get_dirs(self, pid):
         x, y = self.get_x_y(pid)
         dirs = []
-        dirs.append(('0', x, y + 1))
-        dirs.append(('1', x, y - 1))
-        dirs.append(('2', x + 1, y))
-        dirs.append(('3', x - 1, y))
+        dirs.append((0, x, y + 1))
+        dirs.append((1, x, y - 1))
+        dirs.append((2, x + 1, y))
+        dirs.append((3, x - 1, y))
         return dirs
 
     def get_graph_cell(self, px, py):
@@ -186,8 +184,8 @@ class LegStart(object):
                 nx, ny = path[1]
                 cell = self.get_cell_id(nx, ny)
                 self.short_move[st][ed] = pre_move[cell]
-            print(self.short_path[st][ed]),
-            print(self.short_move[st][ed])
+            # print(self.short_path[st][ed]),
+            # print(self.short_move[st][ed])
 
     def get_tunnel_dir(self, s):
         if s == "down":
