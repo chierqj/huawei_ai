@@ -86,6 +86,7 @@ class LegStart(object):
 
     def initialize_msg(self, msg):
         self.msg = msg
+        config.limit_path_length = self.msg['msg_data']['map']['vision'] + 2
 
     @msimulog("LegStart")
     def excute(self, msg):
