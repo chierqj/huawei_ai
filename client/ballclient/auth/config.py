@@ -13,7 +13,7 @@ log_file_path = 'C:/Users/chier/Desktop/huawei_ai/log/battle.log'
 need_short_path = False
 
 # 是否限制最短路长度 -1 表示不限制
-limit_path_length = 6
+limit_path_length = 5
 
 # log是否输出详细每条鱼每一步的情况
 record_detial = True

@@ -161,11 +161,14 @@ class DoBeat():
             if dis < min_dis:
                 # 查表获取我到金币之间的移动方向
                 mv = mLegStart.get_short_move(px, py, x, y)
-                if mv != None:
+                if mv == None:
+                    mv = self.physics_go(px, py, x, y)
+                if mv == None:
+                    continue
                     # 我走一步到哪了，我是px, py
-                    nx, ny = self.go_next(px, py, mv)
-                    if False == self.match_beat_eated(nx, ny):
-                        min_dis, result = dis, mv
+                nx, ny = self.go_next(px, py, mv)
+                if False == self.match_beat_eated(nx, ny):
+                    min_dis, result = dis, mv
         return result
 
     # 获取最近的虫洞移动方向
@@ -197,14 +200,20 @@ class DoBeat():
 
     # 开始随机游走
     def random_walk(self):
-        # 随机游走之前，先去找虫洞。
         dirs = [('up', 0, -1), ('down', 0, 1),
                 ('left', -1, 0), ('right', 1, 0)]
+        fail, result = False, None
         for mv, x, y in dirs:
             if self.judge_random_walk(self.mPlayer['x'] + x, self.mPlayer['y'] + y):
-                return mv
-        self.record_detial("None", "躲不过去")
-        return mRound.direction[random.randint(1, 12317) % 4 + 1]
+                result = mv
+            else:
+                fail = True
+        if result == None:
+            return mRound.direction[random.randint(1, 12317) % 4 + 1]
+        if False == fail:
+            self.record_detial("random", "都很安全")
+            return mRound.direction[random.randint(1, 12317) % 4 + 1]
+        return result
 
     def record_detial(self, move, text):
         if False == config.record_detial or None == move:
@@ -283,6 +292,18 @@ class DoThink():
         if cell == 'right':
             return x + 1, y
 
+    # 因为能看到金币，但是最短路吃不到。所以尝试物理上向金币靠近
+    def physics_go(self, x1, y1, x2, y2):
+        if x1 < x2 and self.judge_physical(x1 + 1, y1):
+            return "right"
+        if x1 > x2 and self.judge_physical(x1 - 1, y1):
+            return "left"
+        if y1 < y2 and self.judge_physical(x1, y1 + 1):
+            return "down"
+        if y1 > y2 and self.judge_physical(x1, y1 - 1):
+            return "up"
+        return None
+
     # 获取最近的金币移动方向
     def find_nearst_power(self):
         min_dis, result = 12317, None
@@ -293,11 +314,14 @@ class DoThink():
             if dis < min_dis:
                 # 查表获取我到金币之间的移动方向
                 mv = mLegStart.get_short_move(px, py, x, y)
-                if mv != None:
+                if mv == None:
+                    mv = self.physics_go(px, py, x, y)
+                if mv == None:
+                    continue
                     # 我走一步到哪了，我是px, py
-                    nx, ny = self.go_next(px, py, mv)
-                    if False == self.match_beat_eated(nx, ny):
-                        min_dis, result = dis, mv
+                nx, ny = self.go_next(px, py, mv)
+                if False == self.match_beat_eated(nx, ny):
+                    min_dis, result = dis, mv
         return result
 
     # 获取最近的虫洞移动方向
@@ -331,10 +355,18 @@ class DoThink():
     def random_walk(self):
         dirs = [('up', 0, -1), ('down', 0, 1),
                 ('left', -1, 0), ('right', 1, 0)]
+        fail, result = False, None
         for mv, x, y in dirs:
             if self.judge_random_walk(self.mPlayer['x'] + x, self.mPlayer['y'] + y):
-                return mv
-        return mRound.direction[random.randint(1, 12317) % 4 + 1]
+                result = mv
+            else:
+                fail = True
+        if result == None:
+            return mRound.direction[random.randint(1, 12317) % 4 + 1]
+        if False == fail:
+            self.record_detial("random", "都很安全")
+            return mRound.direction[random.randint(1, 12317) % 4 + 1]
+        return result
 
     def record_detial(self, move, text):
         if False == config.record_detial or None == move:
@@ -346,7 +378,6 @@ class DoThink():
 
     # 获取下一步的移动方向；
     def get_direct(self):
-
         # 有金币，找最近的金币并且不被追到
         if True == mRound.check_power():
             ret = self.find_nearst_power()
