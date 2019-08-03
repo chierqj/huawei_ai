@@ -252,5 +252,63 @@ class LegStart(object):
             self.graph[wormhole['y']][wormhole['x']] = wormhole["name"]
             self.wormhole[wormhole['name']] = (wormhole['x'], wormhole['y'])
 
+    def create_short_path(self, start_point, end_point):
+        import Queue
+
+        q = Queue.Queue()
+        pre, move_act, vis = dict(), dict(), set()
+        self.fa = [i for i in range(self.tol_cells)]
+
+        q.put(start_point)
+        vis.add(start_point)
+        pre[st] = -1
+
+        while False == q.empty():
+            uid = q.get()
+            if uid == end_point:
+                break
+
+            dirs = self.get_dirs(uid)
+            for mv, nx, ny in dirs:
+                if False == self.match_border(nx, ny):
+                    continue
+                cell = self.get_graph_cell(nx, ny)
+                n_cell_id = self.get_cell_id(nx, ny)
+                if cell.isalpha():
+                    n_cell_id = self.do_wormhoe(cell)
+                elif self.match_tunnel(cell):
+                    n_cell_id = self.do_tunnel(n_cell_id)
+                if n_cell_id in vis:
+                    continue
+                if uid == start_point:
+                    move_act[n_cell_id] = mv
+                else:
+                    self.fa[self.get_fa(n_cell_id)] = self.get_fa(uid)
+
+                vis.add(n_cell_id)
+                pre[n_cell_id] = uid
+                q.put(n_cell_id)
+
+        for key in move_act:
+            value = move_act[key]
+            fa = self.get_fa(key)
+            move_act[fa] = value
+        for point in vis:
+            if self.match_bfs(point) and point != start_point:
+                fa = self.get_fa(point)
+                mv = move_act.get(fa, None)
+                if mv != None:
+                    self.update_short_move_dict(
+                        start_point, point, self.direction[mv])
+
+        if True == config.need_short_path:
+            for point in vis:
+                tmp, path = point, []
+                while tmp != -1:
+                    path.append(self.get_x_y(tmp))
+                    tmp = pre[tmp]
+                path = path[::-1]
+                self.update_short_path_dict(start_point, point, path)
+
 
 mLegStart = LegStart()
