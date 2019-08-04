@@ -1,9 +1,11 @@
 # coding: utf-8
 from ballclient.auth import config
 from ballclient.simulation.my_leg_start import mLegStart
-import random
 from ballclient.utils.logger import mLogger
 from ballclient.utils.time_wapper import msimulog
+
+from ballclient.simulation.do_beat import mDoBeat
+from ballclient.simulation.do_think import mDoThink
 
 
 class Round(object):
@@ -35,6 +37,10 @@ class Round(object):
     def check_power(self):
         return "power" in self.msg["msg_data"]
 
+    # 检查wormhole是否存在，True表示存在
+    def check_wormhole(self):
+        return "wormhole" in mLegStart.msg["msg_data"]["map"]
+
     # 判断边界，True表示在边界内
     def match_border(self, x, y):
         if x < 0 or x >= mLegStart.msg['msg_data']['map']['width']:
@@ -52,11 +58,37 @@ class Round(object):
     # 判断当前是什么回合，分情况对player开始move
     def get_move(self, player):
         if self.msg['msg_data']['mode'] == "beat":
-            ret = mDoBeat.excute(player)
+            ret = mDoBeat.excute(self, player)
             return [ret]
         else:
-            ret = mDoThink.excute(player)
+            ret = mDoThink.excute(self, player)
             return [ret]
+
+    # 根据move改变坐标
+    def go_next(self, x, y, move):
+        if move == 'up':
+            return x, y - 1
+        if move == 'down':
+            return x, y + 1
+        if move == 'left':
+            return x - 1, y
+        if move == 'right':
+            return x + 1, y
+
+    # x, y这个点在向move这方向移动后，真正的坐标是哪里，有虫洞或者传送带
+    def real_go_point(self, x, y, move):
+        go_x, go_y = self.go_next(x, y, move)
+        if False == self.match_border(go_x, go_y):
+            return None, None
+        if True == self.match_meteor(go_x, go_y):
+            return None, None
+        go_cell = mLegStart.get_graph_cell(go_x, go_y)
+        if mLegStart.match_tunnel(go_cell):
+            go_cell_id = mLegStart.get_cell_id(go_x, go_y)
+            go_x, go_y = mLegStart.get_x_y(mLegStart.do_tunnel(go_cell_id))
+        if go_cell.isalpha():
+            go_x, go_y = mLegStart.get_x_y(mLegStart.do_wormhoe(go_cell))
+        return go_x, go_y
 
     # 获取action准备动作，检查变量是否存在，对每一个player开始调度
     def make_action(self):
@@ -93,308 +125,3 @@ class Round(object):
 
 
 mRound = Round()
-
-
-class DoBeat():
-    def __init__(self):
-        self.mPlayer = ""
-        # 被吃的8个方向，顺带自己这个格子。总共9个
-        # self.dinger_dirs = [(-1, -1), (0, -1), (1, -1), (-1, 0),
-        #                     (1, 0), (-1, 1), (0, 1), (1, 1), (0, 0)]
-        # 被吃的4个方向，顺带自己这个格子。总共5个
-        self.dinger_dirs = [(0, -1), (-1, 0), (1, 0), (0, 1), (0, 0)]
-        # 被吃的1个方向，即就是下一步在的位置
-        # self.dinger_dirs = [(0, 0)]
-
-    # 获取两点的曼哈顿距离
-    def get_dis(self, x1, y1, x2, y2):
-        return abs(x1 - x2) + abs(y1 - y2)
-
-    # 判断物理上能不能走到这个位置，不超边界，不是障碍物
-    def judge_physical(self, px, py):
-        if False == mRound.match_border(px, py):
-            return False
-        if True == mRound.match_meteor(px, py):
-            return False
-        return True
-
-    # 判断px, py这个位置能不能被吃，True表示能被吃
-    def match_beat_eated(self, px, py):
-        for player in mRound.msg['msg_data']['players']:
-            if player['team'] != config.team_id:
-                for x, y in self.dinger_dirs:
-                    nx, ny = player['x'] + x, player['y'] + y
-                    if nx == px and ny == py:
-                        return True
-        return False
-
-    # 根据move改变坐标
-    def go_next(self, x, y, cell):
-        if cell == 'up':
-            return x, y - 1
-        if cell == 'down':
-            return x, y + 1
-        if cell == 'left':
-            return x - 1, y
-        if cell == 'right':
-            return x + 1, y
-
-    # 因为能看到金币，但是最短路吃不到。所以尝试物理上向金币靠近
-    def physics_go(self, x1, y1, x2, y2):
-        if x1 < x2 and self.judge_physical(x1 + 1, y1):
-            return "right"
-        if x1 > x2 and self.judge_physical(x1 - 1, y1):
-            return "left"
-        if y1 < y2 and self.judge_physical(x1, y1 + 1):
-            return "down"
-        if y1 > y2 and self.judge_physical(x1, y1 - 1):
-            return "up"
-        return None
-
-    # 获取最近的金币移动方向
-    def find_nearst_power(self):
-        min_dis, result = 12317, None
-        px, py = self.mPlayer['x'], self.mPlayer['y']
-        for it in mRound.msg['msg_data']['power']:
-            x, y = it['x'], it['y']
-            dis = self.get_dis(x, y, px, py)
-            if dis < min_dis:
-                # 查表获取我到金币之间的移动方向
-                mv = mLegStart.get_short_move(px, py, x, y)
-                if mv == None:
-                    mv = self.physics_go(px, py, x, y)
-                if mv == None:
-                    continue
-                    # 我走一步到哪了，我是px, py
-                nx, ny = self.go_next(px, py, mv)
-                if False == self.match_beat_eated(nx, ny):
-                    min_dis, result = dis, mv
-        return result
-
-    # 获取最近的虫洞移动方向
-    def find_nearst_worm_hole(self):
-        min_dis, result = 12317, None
-        px, py = self.mPlayer['x'], self.mPlayer['y']
-        for it in mLegStart.msg['msg_data']['map']['wormhole']:
-            x, y = it['x'], it['y']
-            dis = self.get_dis(x, y, px, py)
-            if dis <= min_dis:
-                # 查表获取我到虫洞之间的移动方向
-                mv = mLegStart.get_short_move(px, py, x, y)
-                if mv != None:
-                    # 我走一步到哪了，我是px, py
-                    nx, ny = self.go_next(px, py, mv)
-                    if False == self.match_beat_eated(nx, ny):
-                        min_dis, result = dis, mv
-        return result
-
-    # 能不能随机游走，True表示能
-    def judge_random_walk(self, px, py):
-        # 物理上走不了，返回False
-        if False == self.judge_physical(px, py):
-            return False
-        # 看看会不会被吃，True表示被吃了，不能走
-        if True == self.match_beat_eated(px, py):
-            return False
-        return True
-
-    # 开始随机游走
-    def random_walk(self):
-        dirs = [('up', 0, -1), ('down', 0, 1),
-                ('left', -1, 0), ('right', 1, 0)]
-        fail, result = False, None
-        for mv, x, y in dirs:
-            if self.judge_random_walk(self.mPlayer['x'] + x, self.mPlayer['y'] + y):
-                result = mv
-            else:
-                fail = True
-        if result == None:
-            return mRound.direction[random.randint(1, 12317) % 4 + 1]
-        if False == fail:
-            self.record_detial("random", "都很安全")
-            return mRound.direction[random.randint(1, 12317) % 4 + 1]
-        return result
-
-    def record_detial(self, move, text):
-        if False == config.record_detial or None == move:
-            return
-        round_id = mRound.msg['msg_data']['round_id']
-        player_id = self.mPlayer['id']
-        mLogger.info('[round: {}, fish: {}, from: ({}, {}), move: {}] {}'.format(
-            round_id, player_id, self.mPlayer['x'], self.mPlayer['y'], move, text))
-
-    # 获取下一步的移动方向；
-    def get_direct(self):
-        # 有金币，找最近的金币并且不被追到
-        if True == mRound.check_power():
-            ret = self.find_nearst_power()
-            self.record_detial(ret, "找到金币")
-        # 没有金币，尝试去找虫洞
-        else:
-            ret = self.find_nearst_worm_hole()
-            self.record_detial(ret, "找到虫洞")
-        # 以上两种情况都失败了，说明P都没有，或者贼危险，容易被吃，开始随机游走
-        if None == ret:
-            ret = self.random_walk()
-            self.record_detial(ret, "随机游走")
-        return ret
-
-    def excute(self, player):
-        self.mPlayer = player
-        return self.get_direct()
-
-
-mDoBeat = DoBeat()
-
-
-class DoThink():
-    def __init__(self):
-        self.mPlayer = ""
-        # 被吃的8个方向，顺带自己这个格子。总共9个
-        # self.dinger_dirs = [(-1, -1), (0, -1), (1, -1), (-1, 0),
-        #                     (1, 0), (-1, 1), (0, 1), (1, 1), (0, 0)]
-        # 被吃的4个方向，顺带自己这个格子。总共5个
-        self.dinger_dirs = [(0, -1), (-1, 0), (1, 0), (0, 1), (0, 0)]
-        # 被吃的1个方向，即就是下一步在的位置
-        # self.dinger_dirs = [(0, 0)]
-
-    # 获取两点的曼哈顿距离
-    def get_dis(self, x1, y1, x2, y2):
-        return abs(x1 - x2) + abs(y1 - y2)
-
-    # 判断物理上能不能走到这个位置，不超边界，不是障碍物
-    def judge_physical(self, px, py):
-        if False == mRound.match_border(px, py):
-            return False
-        if True == mRound.match_meteor(px, py):
-            return False
-        return True
-
-    # 判断px, py这个位置能不能被吃，True表示能被吃；Think回合，我最大
-    def match_beat_eated(self, px, py):
-        return False
-        for player in mRound.msg['msg_data']['players']:
-            if player['team'] != config.team_id:
-                for x, y in self.dinger_dirs:
-                    nx, ny = player['x'] + x, player['y'] + y
-                    if nx == px and ny == py:
-                        return True
-        return False
-
-    # 根据move改变坐标
-    def go_next(self, x, y, cell):
-        if cell == 'up':
-            return x, y - 1
-        if cell == 'down':
-            return x, y + 1
-        if cell == 'left':
-            return x - 1, y
-        if cell == 'right':
-            return x + 1, y
-
-    # 因为能看到金币，但是最短路吃不到。所以尝试物理上向金币靠近
-    def physics_go(self, x1, y1, x2, y2):
-        if x1 < x2 and self.judge_physical(x1 + 1, y1):
-            return "right"
-        if x1 > x2 and self.judge_physical(x1 - 1, y1):
-            return "left"
-        if y1 < y2 and self.judge_physical(x1, y1 + 1):
-            return "down"
-        if y1 > y2 and self.judge_physical(x1, y1 - 1):
-            return "up"
-        return None
-
-    # 获取最近的金币移动方向
-    def find_nearst_power(self):
-        min_dis, result = 12317, None
-        px, py = self.mPlayer['x'], self.mPlayer['y']
-        for it in mRound.msg['msg_data']['power']:
-            x, y = it['x'], it['y']
-            dis = self.get_dis(x, y, px, py)
-            if dis < min_dis:
-                # 查表获取我到金币之间的移动方向
-                mv = mLegStart.get_short_move(px, py, x, y)
-                if mv == None:
-                    mv = self.physics_go(px, py, x, y)
-                if mv == None:
-                    continue
-                    # 我走一步到哪了，我是px, py
-                nx, ny = self.go_next(px, py, mv)
-                if False == self.match_beat_eated(nx, ny):
-                    min_dis, result = dis, mv
-        return result
-
-    # 获取最近的虫洞移动方向
-    def find_nearst_worm_hole(self):
-        min_dis, result = 12317, None
-        px, py = self.mPlayer['x'], self.mPlayer['y']
-        for it in mLegStart.msg['msg_data']['map']['wormhole']:
-            x, y = it['x'], it['y']
-            dis = self.get_dis(x, y, px, py)
-            if dis <= min_dis:
-                # 查表获取我到虫洞之间的移动方向
-                mv = mLegStart.get_short_move(px, py, x, y)
-                if mv != None:
-                    # 我走一步到哪了，我是px, py
-                    nx, ny = self.go_next(px, py, mv)
-                    if False == self.match_beat_eated(nx, ny):
-                        min_dis, result = dis, mv
-        return result
-
-    # 能不能随机游走，True表示能
-    def judge_random_walk(self, px, py):
-        # 物理上走不了，返回False
-        if False == self.judge_physical(px, py):
-            return False
-        # 看看会不会被吃，True表示被吃了，不能走
-        if True == self.match_beat_eated(px, py):
-            return False
-        return True
-
-    # 开始随机游走
-    def random_walk(self):
-        dirs = [('up', 0, -1), ('down', 0, 1),
-                ('left', -1, 0), ('right', 1, 0)]
-        fail, result = False, None
-        for mv, x, y in dirs:
-            if self.judge_random_walk(self.mPlayer['x'] + x, self.mPlayer['y'] + y):
-                result = mv
-            else:
-                fail = True
-        if result == None:
-            return mRound.direction[random.randint(1, 12317) % 4 + 1]
-        if False == fail:
-            self.record_detial("random", "都很安全")
-            return mRound.direction[random.randint(1, 12317) % 4 + 1]
-        return result
-
-    def record_detial(self, move, text):
-        if False == config.record_detial or None == move:
-            return
-        round_id = mRound.msg['msg_data']['round_id']
-        player_id = self.mPlayer['id']
-        mLogger.info('[round: {}, fish: {}, from: ({}, {}), move: {}] {}'.format(
-            round_id, player_id, self.mPlayer['x'], self.mPlayer['y'], move, text))
-
-    # 获取下一步的移动方向；
-    def get_direct(self):
-        # 有金币，找最近的金币并且不被追到
-        if True == mRound.check_power():
-            ret = self.find_nearst_power()
-            self.record_detial(ret, "找到金币")
-        # 没有金币，尝试去找虫洞
-        else:
-            ret = self.find_nearst_worm_hole()
-            self.record_detial(ret, "找到虫洞")
-        # 以上两种情况都失败了，说明P都没有，或者贼危险，容易被吃，开始随机游走
-        if None == ret:
-            ret = self.random_walk()
-            self.record_detial(ret, "随机游走")
-        return ret
-
-    def excute(self, player):
-        self.mPlayer = player
-        return self.get_direct()
-
-
-mDoThink = DoThink()
