@@ -12,6 +12,9 @@ log_file_path = 'C:/Users/chier/Desktop/huawei_ai/log/battle.log'
 # debug模式最短路径也保存，提交的时候不需要
 need_short_path = False
 
+# 是否需要计算最短路第一步的移动方向
+need_short_move = False
+
 # 是否限制最短路长度 -1 表示不限制
 limit_path_length = 5
 

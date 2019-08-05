@@ -152,16 +152,23 @@ class LegStart(object):
 
         import Queue
 
+        # bfs 需要变量
         q = Queue.Queue()
-        move_act, vis = dict(), set()
-        self.fa = [i for i in range(self.tol_cells)]
+        vis = set()
 
-        q.put((start_point, 0))
-        vis.add(start_point)
+        # 记录最短路径的第一步移动方向需要变量
+        if True == config.need_short_move:
+            move_act = dict()
+            self.fa = [i for i in range(self.tol_cells)]
 
+        # 记录最短路路径需要变量
         if True == config.need_short_path:
             pre = dict()
             pre[start_point] = -1
+
+        # 队列添加第一个节点
+        q.put((start_point, 0))
+        vis.add(start_point)
 
         while False == q.empty():
             uid, step = q.get()
@@ -178,27 +185,31 @@ class LegStart(object):
                     n_cell_id = self.do_tunnel(n_cell_id)
                 if n_cell_id in vis:
                     continue
-                if uid == start_point:
-                    move_act[n_cell_id] = mv
-                else:
-                    self.fa[self.get_fa(n_cell_id)] = self.get_fa(uid)
 
                 vis.add(n_cell_id)
                 q.put((n_cell_id, step + 1))
+
+                if True == config.need_short_move:
+                    if uid == start_point:
+                        move_act[n_cell_id] = mv
+                    else:
+                        self.fa[self.get_fa(n_cell_id)] = self.get_fa(uid)
+
                 if True == config.need_short_path:
                     pre[n_cell_id] = uid
 
-        for key in move_act:
-            value = move_act[key]
-            fa = self.get_fa(key)
-            move_act[fa] = value
-        for point in vis:
-            if self.match_bfs(point) and point != start_point:
-                fa = self.get_fa(point)
-                mv = move_act.get(fa, None)
-                if mv != None:
-                    self.update_short_move_dict(
-                        start_point, point, self.direction[mv])
+        if True == config.need_short_move:
+            for key in move_act:
+                value = move_act[key]
+                fa = self.get_fa(key)
+                move_act[fa] = value
+            for point in vis:
+                if self.match_bfs(point) and point != start_point:
+                    fa = self.get_fa(point)
+                    mv = move_act.get(fa, None)
+                    if mv != None:
+                        self.update_short_move_dict(
+                            start_point, point, self.direction[mv])
 
         if True == config.need_short_path:
             for point in vis:
@@ -244,12 +255,6 @@ class LegStart(object):
         result = None
 
         if pid1 in self.short_length:
-            result = self.short_length[pid1].get(pid2, None)
-        if None == result:
-            self.create_short_path(pid1)
-        if pid1 not in self.short_length:
-            mLogger.warning("({}, {})这个点被孤立了，哪里都去不了".format(x1, y1, x2, y2))
-        else:
             result = self.short_length[pid1].get(pid2, None)
         if None == result:
             mLogger.warning("({}, {}) 到 ({}, {})找不到最短路".format(x1, y1, x2, y2))
