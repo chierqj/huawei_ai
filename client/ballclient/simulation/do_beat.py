@@ -67,8 +67,7 @@ class DoBeat():
         for move, go_x, go_y in safe_moves:
             for power in self.mRoundObj.msg['msg_data']['power']:
                 x, y = power['x'], power['y']
-                short_length = mLegStart.get_short_length(
-                    self.mPlayer['x'], self.mPlayer['y'], x, y)
+                short_length = mLegStart.get_short_length(go_x, go_y, x, y)
                 if short_length != None and short_length < min_dis:
                     min_dis, result = short_length, move
         return result
@@ -90,8 +89,7 @@ class DoBeat():
         for move, go_x, go_y in safe_moves:
             for wormhole in mLegStart.msg['msg_data']['map']['wormhole']:
                 x, y = wormhole['x'], wormhole['y']
-                short_length = mLegStart.get_short_length(
-                    self.mPlayer['x'], self.mPlayer['y'], x, y)
+                short_length = mLegStart.get_short_length(go_x, go_y, x, y)
                 if short_length != None and short_length < min_dis:
                     min_dis, result = short_length, move
         return result

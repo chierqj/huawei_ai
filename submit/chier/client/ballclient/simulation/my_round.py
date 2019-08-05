@@ -55,15 +55,6 @@ class Round(object):
             return True
         return False
 
-    # 判断当前是什么回合，分情况对player开始move
-    def get_move(self, player):
-        if self.msg['msg_data']['mode'] == "beat":
-            ret = mDoBeat.excute(self, player)
-            return [ret]
-        else:
-            ret = mDoThink.excute(self, player)
-            return [ret]
-
     # 根据move改变坐标
     def go_next(self, x, y, move):
         if move == 'up':
@@ -90,28 +81,39 @@ class Round(object):
             go_x, go_y = mLegStart.get_x_y(mLegStart.do_wormhoe(go_cell))
         return go_x, go_y
 
-    # 获取action准备动作，检查变量是否存在，对每一个player开始调度
+    # 判断当前是什么回合，分情况对player开始move
+    def get_move(self, player):
+        if self.msg['msg_data']['mode'] == "beat":
+            ret = mDoBeat.excute(self, player)
+            return [ret]
+        else:
+            ret = mDoThink.excute(self, player)
+            return [ret]
+
+    # 获取action准备动作，先对所有鱼求最短路。然后根据模式不同执行不同的策略。
     def make_action(self):
+        # 检查用的变量是否存在
         self.result["msg_data"]["round_id"] = self.msg['msg_data'].get(
             'round_id', None)
         if False == self.check_players():
             return
 
+        # 遍历players，获取自己的鱼和对方的鱼
         players = self.msg['msg_data'].get('players', [])
-        action = []
+        mPlayers, othPlayers = [], []
         for player in players:
-            if False == self.check_team(player):
-                continue
-            team_id = player.get("team", -1)
-            if team_id == config.team_id:
-                move = self.get_move(player)
-                if move == []:
-                    mLogger.warning("players 移动为空")
-                action.append({
-                    "team": player['team'],
-                    "player_id": player['id'],
-                    "move": move
-                })
+            if player.get("team", -1) == config.team_id:
+                mPlayers.append(player)
+            else:
+                othPlayers.append(player)
+
+        # 调用函数获取action
+        action = []
+        if self.msg['msg_data']['mode'] == "beat":
+            action = mDoBeat.excute(self, mPlayers, othPlayers)
+        else:
+            action = mDoThink.excute(self, mPlayers, othPlayers)
+
         self.result['msg_data']['actions'] = action
 
     # 初始化赋值msg消息

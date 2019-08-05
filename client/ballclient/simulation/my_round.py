@@ -107,18 +107,12 @@ class Round(object):
             else:
                 othPlayers.append(player)
 
-        # 对自己的鱼求最短路
-        for player in mPlayers:
-            start_point = mLegStart.get_cell_id(player['x'], player['y'])
-            # mLogger.info("({},{})({})".format(player['x'], player['y'], start_point))
-            mLegStart.create_short_path(start_point)
-
         # 调用函数获取action
         action = []
         if self.msg['msg_data']['mode'] == "beat":
             action = mDoBeat.excute(self, mPlayers, othPlayers)
         else:
-            action = mDoBeat.excute(self, mPlayers, othPlayers)
+            action = mDoThink.excute(self, mPlayers, othPlayers)
 
         self.result['msg_data']['actions'] = action
 

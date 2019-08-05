@@ -257,6 +257,12 @@ class LegStart(object):
         if pid1 in self.short_length:
             result = self.short_length[pid1].get(pid2, None)
         if None == result:
+            self.create_short_path(pid1)
+        if pid1 not in self.short_length:
+            mLogger.warning("({}, {})这个点被孤立了，哪里都去不了".format(x1, y1, x2, y2))
+        else:
+            result = self.short_length[pid1].get(pid2, None)
+        if None == result:
             mLogger.warning("({}, {}) 到 ({}, {})找不到最短路".format(x1, y1, x2, y2))
         return result
 

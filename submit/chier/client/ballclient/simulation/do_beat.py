@@ -132,10 +132,19 @@ class DoBeat():
 
         return result
 
-    def excute(self, mRoundObj, player):
+    def excute(self, mRoundObj, mPlayers, othPlayers):
         self.mRoundObj = mRoundObj
-        self.mPlayer = player
-        return self.get_direct()
+        # self.mPlayers, self.othPlayers = mPlayers, othPlayers
+
+        action = list()
+        for player in mPlayers:
+            self.mPlayer = player
+            action.append({
+                "team": player['team'],
+                "player_id": player['id'],
+                "move": [self.get_direct()]
+            })
+        return action
 
 
 mDoBeat = DoBeat()
