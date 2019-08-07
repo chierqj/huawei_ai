@@ -6,6 +6,7 @@ from ballclient.utils.time_wapper import msimulog
 
 from ballclient.simulation.do_beat import mDoBeat
 from ballclient.simulation.do_think import mDoThink
+from ballclient.simulation.my_player import mPlayers, othPlayers
 
 
 class Round(object):
@@ -81,15 +82,6 @@ class Round(object):
             go_x, go_y = mLegStart.get_x_y(mLegStart.do_wormhoe(go_cell))
         return go_x, go_y
 
-    # 判断当前是什么回合，分情况对player开始move
-    def get_move(self, player):
-        if self.msg['msg_data']['mode'] == "beat":
-            ret = mDoBeat.excute(self, player)
-            return [ret]
-        else:
-            ret = mDoThink.excute(self, player)
-            return [ret]
-
     # 获取action准备动作，先对所有鱼求最短路。然后根据模式不同执行不同的策略。
     def make_action(self):
         # 检查用的变量是否存在
@@ -100,25 +92,30 @@ class Round(object):
 
         # 遍历players，获取自己的鱼和对方的鱼
         players = self.msg['msg_data'].get('players', [])
-        mPlayers, othPlayers = [], []
         for player in players:
             if player.get("team", -1) == config.team_id:
-                mPlayers.append(player)
+                mPlayers[player['id']].assign(
+                    player['score'], player['sleep'], player['x'], player['y'])
             else:
-                othPlayers.append(player)
-
+                othPlayers[player['id']].assign(
+                    player['score'], player['sleep'], player['x'], player['y'])
         # 调用函数获取action
         action = []
         if self.msg['msg_data']['mode'] == "beat":
-            action = mDoBeat.excute(self, mPlayers, othPlayers)
+            action = mDoBeat.excute(self)
         else:
-            action = mDoThink.excute(self, mPlayers, othPlayers)
+            # action = mDoBeat.excute(self)
+            action = mDoThink.excute(self)
 
         self.result['msg_data']['actions'] = action
 
     # 初始化赋值msg消息
     def initialize_msg(self, msg):
         self.msg = msg
+        for k, value in mPlayers.iteritems():
+            value.initialize()
+        for k, value in othPlayers.iteritems():
+            value.initialize()
 
     # 程序入口
     def excute(self, msg):

@@ -4,6 +4,7 @@ from ballclient.utils.logger import mLogger
 import json
 from ballclient.utils.time_wapper import msimulog
 from ballclient.auth import config
+from ballclient.simulation.my_player import mPlayers, othPlayers, Player
 
 
 class LegStart(object):
@@ -52,7 +53,7 @@ class LegStart(object):
     def match_bfs(self, st):
         x, y = self.get_x_y(st)
         cell = self.get_graph_cell(x, y)
-        if cell == '.' or cell.isalpha():
+        if cell == '.' or self.match_wormhole(cell):
             return True
         return False
 
@@ -77,6 +78,12 @@ class LegStart(object):
     # 判断c是不是传送带
     def match_tunnel(self, c):
         if c == '>' or c == '<' or c == '^' or c == '|':
+            return True
+        return False
+
+    # 判断c是不是虫洞
+    def match_wormhole(self, c):
+        if c.isalpha() and c.lower() in self.wormhole and c.upper() in self.wormhole:
             return True
         return False
 
@@ -172,6 +179,8 @@ class LegStart(object):
 
         while False == q.empty():
             uid, step = q.get()
+            TX, TY = self.get_x_y(uid)
+            # mLogger.info("point: ({},{}); step: {}".format(TX, TY, step))
             self.update_short_length_dict(start_point, uid, step)
             dirs = self.get_dirs(uid)
             for mv, nx, ny in dirs:
@@ -179,7 +188,7 @@ class LegStart(object):
                     continue
                 cell = self.get_graph_cell(nx, ny)
                 n_cell_id = self.get_cell_id(nx, ny)
-                if cell.isalpha():
+                if self.match_wormhole(cell):
                     n_cell_id = self.do_wormhoe(cell)
                 elif self.match_tunnel(cell):
                     n_cell_id = self.do_tunnel(n_cell_id)
@@ -322,6 +331,24 @@ class LegStart(object):
     def initialize_msg(self, msg):
         self.msg = msg
 
+    # 初始化所有的players
+    def create_players(self):
+        teams = self.msg['msg_data'].get("teams", [])
+        for team in teams:
+            team_id = team.get("id", -1)
+            if team_id == config.team_id:
+                players = team.get("players", [])
+                force = team.get("force", "NULL")
+                for player in players:
+                    mPlayers[player] = Player(
+                        fish_id=player, team_id=team_id, force=force)
+            else:
+                players = team.get("players", [])
+                force = team.get("force", "NULL")
+                for player in players:
+                    othPlayers[player] = Player(
+                        fish_id=player, team_id=team_id, force=force)
+
     @msimulog("LegStart")
     def excute(self, msg):
         # 初始化赋值msg
@@ -337,6 +364,7 @@ class LegStart(object):
         self.create_graph()
         # 预处理所有传送带的位置，这个传送到可以直接到哪里
         self.init_tunnel_go()
+        self.create_players()
 
 
 mLegStart = LegStart()

@@ -4,6 +4,7 @@ from ballclient.simulation.my_leg_start import mLegStart
 from ballclient.utils.logger import mLogger
 from ballclient.utils.time_wapper import msimulog
 from ballclient.auth import config
+from ballclient.simulation.my_player import mPlayers, othPlayers
 import random
 
 
@@ -24,6 +25,19 @@ class DoBeat():
     def get_dis(self, x1, y1, x2, y2):
         return abs(x1 - x2) + abs(y1 - y2)
 
+    # 计算要吃的金币周围有几个空位
+
+    def cal_empty_block(self, px, py):
+        result = 0
+        for adx, ady in self.dinger_dirs:
+            x, y = px + adx, py + ady
+            if px == x and py == y:
+                continue
+            if True == self.mRoundObj.match_border(x, y):
+                if False == self.mRoundObj.match_meteor(x, y):
+                    result += 1
+        return result
+
     # 判断px, py这个位置能不能被吃，True表示能被吃
     def match_beat_eated(self, px, py):
         for player in self.mRoundObj.msg['msg_data']['players']:
@@ -38,23 +52,24 @@ class DoBeat():
         if False == config.record_detial or None == move:
             return
         round_id = self.mRoundObj.msg['msg_data']['round_id']
-        player_id = self.mPlayer['id']
+        player_id = self.mPlayer.id
         mLogger.info('[round: {}, fish: {}, from: ({}, {}), move: {}] {}'.format(
-            round_id, player_id, self.mPlayer['x'], self.mPlayer['y'], move, text))
+            round_id, player_id, self.mPlayer.x, self.mPlayer.y, move, text))
 
     # 计算可以行走 & 不被吃的方向
-    def get_safe_moves(self):
+    def get_safe_moves(self, if_eated):
         moves = ['up', 'down', 'left', 'right']
         result = []
         for move in moves:
             # 获取move之后真正到达的位置
             go_x, go_y = self.mRoundObj.real_go_point(
-                self.mPlayer['x'], self.mPlayer['y'], move)
+                self.mPlayer.x, self.mPlayer.y, move)
             if False == self.mRoundObj.match_border(go_x, go_y):
                 continue
             if True == self.mRoundObj.match_meteor(go_x, go_y):
                 continue
             if True == self.match_beat_eated(go_x, go_y):
+                if_eated = True
                 continue
             result.append((move, go_x, go_y))
         return result
@@ -67,21 +82,24 @@ class DoBeat():
         for move, go_x, go_y in safe_moves:
             for power in self.mRoundObj.msg['msg_data']['power']:
                 x, y = power['x'], power['y']
+                empty_block_num = self.cal_empty_block(x, y)
+                if empty_block_num < 2:
+                    continue
                 short_length = mLegStart.get_short_length(go_x, go_y, x, y)
                 if short_length != None and short_length < min_dis:
                     min_dis, result = short_length, move
         return result
 
       # 判断当前self.mPlayer是不是身处虫洞
-    def is_wromhole(self):
-        cell = mLegStart.get_graph_cell(self.mPlayer['x'], self.mPlayer['y'])
+    def is_wormhole(self):
+        cell = mLegStart.get_graph_cell(self.mPlayer.x, self.mPlayer.y)
         if cell.isalpha():
             return True
         return False
 
     # 向虫洞方向移动
     def move_to_wrom_hole(self, safe_moves):
-        if True == self.is_wromhole():
+        if True == self.is_wormhole():
             return None
         if False == self.mRoundObj.check_wormhole():
             return None
@@ -104,8 +122,9 @@ class DoBeat():
 
     # 获取下一步的移动方向；
     def get_direct(self):
+        if_eated = False
         # 上下左右四个方向，哪个可以行走(边界 & 安全)
-        safe_moves = self.get_safe_moves()
+        safe_moves = self.get_safe_moves(if_eated)
 
         # 如果safe_moves为None，表示都不安全，随机游走听天命
         if len(safe_moves) == 0:
@@ -121,10 +140,11 @@ class DoBeat():
             return result
 
         # 第二优先级；找虫洞
-        result = self.move_to_wrom_hole(safe_moves)
-        if result != None:
-            self.record_detial(result, "找虫洞")
-            return result
+        if False == if_eated:
+            result = self.move_to_wrom_hole(safe_moves)
+            if result != None:
+                self.record_detial(result, "找虫洞")
+                return result
 
         # 第三优先级；在安全的方向内随机游走
         result = self.move_random_walk(safe_moves)
@@ -132,16 +152,15 @@ class DoBeat():
 
         return result
 
-    def excute(self, mRoundObj, mPlayers, othPlayers):
+    def excute(self, mRoundObj):
         self.mRoundObj = mRoundObj
-        # self.mPlayers, self.othPlayers = mPlayers, othPlayers
 
         action = list()
-        for player in mPlayers:
+        for k, player in mPlayers.iteritems():
             self.mPlayer = player
             action.append({
-                "team": player['team'],
-                "player_id": player['id'],
+                "team": player.team,
+                "player_id": player.id,
                 "move": [self.get_direct()]
             })
         return action
