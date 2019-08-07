@@ -255,8 +255,10 @@ class LegStart(object):
     # 暴露给其它地方用的获取两个点之间的最短路径，再config配置中需要打开
     def get_short_length(self, x1, y1, x2, y2):
         if self.out_graph_border(x1, y1):
+            mLogger.warning("start_point: ({}, {})越界了".format(x1, y1))
             return None
         if self.out_graph_border(x2, y2):
+            mLogger.warning("end_point: ({}, {})越界了".format(x2, y2))
             return None
 
         pid1 = self.get_cell_id(x1, y1)
@@ -349,7 +351,6 @@ class LegStart(object):
                     othPlayers[player] = Player(
                         fish_id=player, team_id=team_id, force=force)
 
-    @msimulog("LegStart")
     def excute(self, msg):
         # 初始化赋值msg
         self.initialize_msg(msg)

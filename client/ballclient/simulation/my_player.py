@@ -10,43 +10,31 @@ class Player(object):
         self.team = team_id
         self.force = force
 
-        # 在每一个round更新的变量
+        # 在每一个round自身需要改变的
         self.score = 0
         self.sleep = True
         self.x = -1
         self.y = -1
-        self.visibile = False
-
-        self.bug_num = 0
-
-        self.bug_move = []
-        if self.id == 4:
-            self.bug_move = [(7, 13), (8, 13), (9, 13),
-                             (10, 13), (11, 13), (12, 13)]
-        if self.id == 5:
-            self.bug_move = [(7, 11), (8, 11), (9, 11),
-                             (10, 11), (11, 11), (12, 11)]
-
-        if self.id == 6:
-            self.bug_move = [(7, 8), (8, 8), (9, 8),
-                             (10, 8), (11, 8), (12, 8)]
-
-        if self.id == 7:
-            self.bug_move = [(7, 6), (8, 6), (9, 6),
-                             (10, 6), (11, 6), (12, 6)]
-
+        self.visiable = False
         self.target = None
+
+        # 奖惩相关的变量
+        self.last_appear_dis = 600
 
     def initialize(self):
         self.sleep = True
-        self.visibile = False
 
-    def assign(self, score, sleep, x, y):
+    def assign(self, last_appear_dis, score, sleep, x, y, visiable):
+        self.last_appear_dis = last_appear_dis
         self.score = score
-        self.sleep = (False if sleep == 0 else True)
+        self.sleep = sleep
         self.x = x
         self.y = y
-        self.visibile = True
+        self.visiable = visiable
+
+    def update_last_appear(self):
+        self.last_appear_dis += 1
+        self.visiable = False
 
 
 mPlayers = dict()

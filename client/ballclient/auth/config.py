@@ -19,4 +19,4 @@ need_short_move = True
 limit_path_length = 5
 
 # log是否输出详细每条鱼每一步的情况
-record_detial = False
+record_detial = True

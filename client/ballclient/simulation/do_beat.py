@@ -5,14 +5,15 @@ from ballclient.utils.logger import mLogger
 from ballclient.utils.time_wapper import msimulog
 from ballclient.auth import config
 from ballclient.simulation.my_player import mPlayers, othPlayers
+from ballclient.simulation.my_power import Power
 import random
+import math
 
 
 class DoBeat():
     def __init__(self):
         self.mRoundObj = ""
 
-        self.mPlayer = ""
         # 被吃的8个方向，顺带自己这个格子。总共9个
         # self.dinger_dirs = [(-1, -1), (0, -1), (1, -1), (-1, 0),
         #                     (1, 0), (-1, 1), (0, 1), (1, 1), (0, 0)]
@@ -20,13 +21,13 @@ class DoBeat():
         self.dinger_dirs = [(0, -1), (-1, 0), (1, 0), (0, 1), (0, 0)]
         # 被吃的1个方向，即就是下一步在的位置
         # self.dinger_dirs = [(0, 0)]
+        self.weight_moves = dict()
 
     # 获取两点的曼哈顿距离
     def get_dis(self, x1, y1, x2, y2):
         return abs(x1 - x2) + abs(y1 - y2)
 
     # 计算要吃的金币周围有几个空位
-
     def cal_empty_block(self, px, py):
         result = 0
         for adx, ady in self.dinger_dirs:
@@ -48,120 +49,114 @@ class DoBeat():
                         return True
         return False
 
-    def record_detial(self, move, text):
-        if False == config.record_detial or None == move:
-            return
-        round_id = self.mRoundObj.msg['msg_data']['round_id']
-        player_id = self.mPlayer.id
-        mLogger.info('[round: {}, fish: {}, from: ({}, {}), move: {}] {}'.format(
-            round_id, player_id, self.mPlayer.x, self.mPlayer.y, move, text))
-
-    # 计算可以行走 & 不被吃的方向
-    def get_safe_moves(self, if_eated):
+    def get_next_one_points(self, player):
         moves = ['up', 'down', 'left', 'right']
         result = []
         for move in moves:
             # 获取move之后真正到达的位置
-            go_x, go_y = self.mRoundObj.real_go_point(
-                self.mPlayer.x, self.mPlayer.y, move)
+            go_x, go_y = self.mRoundObj.real_go_point(player.x, player.y, move)
             if False == self.mRoundObj.match_border(go_x, go_y):
                 continue
             if True == self.mRoundObj.match_meteor(go_x, go_y):
                 continue
-            if True == self.match_beat_eated(go_x, go_y):
-                if_eated = True
-                continue
             result.append((move, go_x, go_y))
         return result
 
-    # 向金币方向移动
-    def move_to_power(self, safe_moves):
-        if False == self.mRoundObj.check_power():
-            return None
-        min_dis, result = 12317, None
-        for move, go_x, go_y in safe_moves:
-            for power in self.mRoundObj.msg['msg_data']['power']:
-                x, y = power['x'], power['y']
-                empty_block_num = self.cal_empty_block(x, y)
-                if empty_block_num < 2:
-                    continue
-                short_length = mLegStart.get_short_length(go_x, go_y, x, y)
-                if short_length != None and short_length < min_dis:
-                    min_dis, result = short_length, move
-        return result
+    def initial_weight_moves(self, next_one_points):
+        self.weight_moves.clear()
+        for move, go_x, go_y in next_one_points:
+            self.weight_moves[move] = 0
 
-      # 判断当前self.mPlayer是不是身处虫洞
-    def is_wormhole(self):
-        cell = mLegStart.get_graph_cell(self.mPlayer.x, self.mPlayer.y)
-        if cell.isalpha():
-            return True
-        return False
+    def reward_power(self, move, px, py):
+        for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
+            dis = mLegStart.get_short_length(px, py, power.x, power.y)
+            cell_id = mLegStart.get_cell_id(power.x, power.y)
+            # if dis == 0:
+            #     mLogger.info("我的鱼已经挨着金币了")
+            #     dis = 0.5
+            weight = 1 / math.exp(dis)
+            nweight = self.weight_moves.get(move, 0)
+            self.weight_moves[move] = float("%.4f" % (nweight + weight))
 
-    # 向虫洞方向移动
-    def move_to_wrom_hole(self, safe_moves):
-        if True == self.is_wormhole():
-            return None
+    def reward_wormhole(self, move, px, py):
         if False == self.mRoundObj.check_wormhole():
-            return None
-        min_dis, result = 12317, None
-        for move, go_x, go_y in safe_moves:
-            for wormhole in mLegStart.msg['msg_data']['map']['wormhole']:
-                x, y = wormhole['x'], wormhole['y']
-                short_length = mLegStart.get_short_length(go_x, go_y, x, y)
-                if short_length != None and short_length < min_dis:
-                    min_dis, result = short_length, move
-        return result
+            return
+        for wormhole in mLegStart.msg['msg_data']['map']['wormhole']:
+            dis = mLegStart.get_short_length(
+                px, py, wormhole['x'], wormhole['y'])
+            cell_id = mLegStart.get_cell_id(wormhole['x'], wormhole['y'])
+            # if dis == 0:
+            #     mLogger.info("我的鱼身处虫洞上面")
+            #     dis = 0.25
+            weight = 1 / math.exp(dis)
+            nweight = self.weight_moves.get(move, 0)
+            self.weight_moves[move] = float("%.4f" % (nweight + weight))
 
-    # 在可行的移动方向内随机游走，如果可行方向为空，那就随机四个方向
-    def move_random_walk(self, safe_moves):
-        length = len(safe_moves)
-        if length == 0:
-            return self.mRoundObj.direction[random.randint(1, 12317) % 4 + 1]
-        rd = random.randint(1, 12317) % length
-        return safe_moves[rd][0]
+    def reward_player(self, move, px, py):
+        pass
 
-    # 获取下一步的移动方向；
-    def get_direct(self):
-        if_eated = False
-        # 上下左右四个方向，哪个可以行走(边界 & 安全)
-        safe_moves = self.get_safe_moves(if_eated)
+    def reward_weight(self, next_one_points):
+        for move, go_x, go_y in next_one_points:
+            self.reward_power(move, go_x, go_y)
+            self.reward_player(move, go_x, go_y)
+            self.reward_wormhole(move, go_x, go_y)
 
-        # 如果safe_moves为None，表示都不安全，随机游走听天命
-        if len(safe_moves) == 0:
-            self.record_detial("random", "不安全听天命")
-            return self.move_random_walk(safe_moves)
+    def punish_power(self, move, px, py):
+        pass
 
-        result = None
+    def punish_player(self, move, px, py):
+        for k, player in othPlayers.iteritems():
+            if player.x == -1 or player.y == -1:
+                continue
+            dis = mLegStart.get_short_length(px, py, player.x, player.y)
+            cell_id = mLegStart.get_cell_id(player.x, player.y)
+            if dis == 0:
+                mLogger.info("敌方的鱼已经挨着我的鱼了")
+            if player.last_appear_dis == 0:
+                weight = 1 / math.exp(dis)
+            else:
+                weight = 1 / math.exp(dis) + 1 / player.last_appear_dis
+            nweight = self.weight_moves.get(move, 0)
+            self.weight_moves[move] = float("%.4f" % (nweight - weight))
 
-        # 第一优先级：吃金币
-        result = self.move_to_power(safe_moves)
-        if result != None:
-            self.record_detial(result, "吃金币")
-            return result
+    def punish_weight(self, next_one_points):
+        for move, go_x, go_y in next_one_points:
+            self.punish_power(move, go_x, go_y)
+            self.punish_player(move, go_x, go_y)
 
-        # 第二优先级；找虫洞
-        if False == if_eated:
-            result = self.move_to_wrom_hole(safe_moves)
-            if result != None:
-                self.record_detial(result, "找虫洞")
-                return result
+    def select_best_move(self):
+        max_weight, ret_move = None, None
+        for move, weight in self.weight_moves.iteritems():
+            if max_weight == None or weight > max_weight:
+                max_weight, ret_move = weight, move
+        mLogger.info("{}, {}".format(ret_move, max_weight))
+        return ret_move
 
-        # 第三优先级；在安全的方向内随机游走
-        result = self.move_random_walk(safe_moves)
-        self.record_detial(result, "随机游走")
+    def record_detial(self, player, move):
+        if False == config.record_detial or None == move:
+            return
 
-        return result
+        mLogger.info(self.weight_moves)
+        mLogger.info('[fish: {}, from: ({}, {}), move: {}]'.format(
+            player.id, player.x, player.y, move))
+
+    def do_excute(self, player):
+        next_one_points = self.get_next_one_points(player)
+        self.initial_weight_moves(next_one_points)
+        self.reward_weight(next_one_points)
+        self.punish_weight(next_one_points)
+        ret_move = self.select_best_move()
+        self.record_detial(player, ret_move)
+        return ret_move
 
     def excute(self, mRoundObj):
         self.mRoundObj = mRoundObj
-
         action = list()
         for k, player in mPlayers.iteritems():
-            self.mPlayer = player
             action.append({
                 "team": player.team,
                 "player_id": player.id,
-                "move": [self.get_direct()]
+                "move": [self.do_excute(player)]
             })
         return action
 
