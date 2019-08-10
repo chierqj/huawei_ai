@@ -35,6 +35,8 @@ class DoThink():
                 continue
             if True == self.mRoundObj.match_meteor(go_x, go_y):
                 continue
+            if go_x == player.x and go_y == player.y:
+                continue
             result.append((move, go_x, go_y))
         return result
 
@@ -51,13 +53,14 @@ class DoThink():
 
     def reward_power(self, move, px, py):
         for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
-            dis = mLegStart.get_short_length(px, py, power.x, power.y) + 1
+            dis = mLegStart.get_short_length(px, py, power.x, power.y)
+            dis += power.last_appear_dis * config.ALPHA
 
-            weight = 1.0 / (dis + power.last_appear_dis * 0.2)
+            weight = 1.0 / math.exp(dis)
             nweight = self.weight_moves.get(move, 0)
 
             self.weight_moves[move] = float(
-                "%.6f" % (nweight + weight * config.POWER_WEIGHT))
+                "%.10f" % (nweight + weight * config.THINK_POWER_WEIGHT))
 
     def reward_weight(self, next_one_points):
         for move, go_x, go_y in next_one_points:
@@ -75,13 +78,16 @@ class DoThink():
         for k, player in othPlayers.iteritems():
             if player.x == -1 or player.y == -1:
                 continue
-            dis = mLegStart.get_short_length(player.x, player.y, px, py) + 1
 
-            weight = 1.0 / (dis + player.last_appear_dis * 0.2)
+            dis = mLegStart.get_short_length(player.x, player.y, px, py)
+            dis += player.last_appear_dis * config.ALPHA
+            dis -= config.DELTA
+
+            weight = 1.0 / math.exp(dis)
             nweight = self.weight_moves.get(move, 0)
 
             self.weight_moves[move] = float(
-                "%.6f" % (nweight + weight * config.PLAYER_WEIGHT))
+                "%.10f" % (nweight + weight * config.THINK_PLAYER_WEIGHT))
 
     def punish_cell(self, move, px, py):
         cell_id = mLegStart.get_cell_id(px, py)
@@ -91,7 +97,7 @@ class DoThink():
         nweight = self.weight_moves.get(move, 0)
 
         self.weight_moves[move] = float(
-            "%.6f" % (nweight - weight * config.CELL_WEIGHT))
+            "%.10f" % (nweight - weight * config.CELL_WEIGHT))
 
     def punish_weight(self, next_one_points):
         for move, go_x, go_y in next_one_points:

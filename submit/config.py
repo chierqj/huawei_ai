@@ -13,12 +13,12 @@ log_file_path = '/var/log/battle.log'
 need_short_path = False
 
 # 是否需要计算最短路第一步的移动方向
-need_short_move = True
+need_short_move = False
 
 # log是否输出详细每条鱼每一步的情况
-record_detial = False
+record_detial = True
 
 # 权重
 POWER_WEIGHT = 1.0
 PLAYER_WEIGHT = 3.0
-CELL_WEIGHT = 0.01
+CELL_WEIGHT = 0.1

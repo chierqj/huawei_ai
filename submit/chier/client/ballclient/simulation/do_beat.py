@@ -36,6 +36,8 @@ class DoBeat():
                 continue
             if True == self.mRoundObj.match_meteor(go_x, go_y):
                 continue
+            if go_x == player.x and go_y == player.y:
+                continue
             result.append((move, go_x, go_y))
         return result
 
@@ -54,7 +56,7 @@ class DoBeat():
         for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
             dis = mLegStart.get_short_length(px, py, power.x, power.y) + 1
 
-            weight = 1.0 / (dis + power.last_appear_dis * 0.2)
+            weight = 1.0 / math.exp(dis + power.last_appear_dis * 0.5)
             nweight = self.weight_moves.get(move, 0)
 
             self.weight_moves[move] = float(
@@ -78,7 +80,7 @@ class DoBeat():
                 continue
             dis = mLegStart.get_short_length(player.x, player.y, px, py) + 1
 
-            weight = 1.0 / (dis + player.last_appear_dis * 0.2)
+            weight = 1.0 / math.exp(dis + player.last_appear_dis * 0.1)
             nweight = self.weight_moves.get(move, 0)
 
             self.weight_moves[move] = float(

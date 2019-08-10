@@ -16,7 +16,7 @@ need_short_path = False
 need_short_move = False
 
 # log是否输出详细每条鱼每一步的情况
-record_detial = False
+record_detial = True
 
 # 权重
 POWER_WEIGHT = 1.0

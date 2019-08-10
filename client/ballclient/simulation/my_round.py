@@ -21,6 +21,7 @@ class Round(object):
             }
         }
         self.POWER_WAIT_SET = dict()
+        self.my_alive_player_num = 0
 
     # 暴露给service使用的，获取最终结果
     def get_result(self):
@@ -101,6 +102,7 @@ class Round(object):
     # 初始化赋值msg消息;更新fish和power集合
     def initialize_msg(self, msg):
         self.msg = msg
+        self.my_alive_player_num = 0
 
     # 更新players状态
     def initialize_players(self):
@@ -125,6 +127,8 @@ class Round(object):
                     y=player['y'],
                     visiable=True
                 )
+                if player['sleep'] == 0:
+                    self.my_alive_player_num += 1
             else:
                 othPlayers[player['id']].assign(
                     last_appear_dis=0,
