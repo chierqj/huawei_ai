@@ -333,33 +333,17 @@ class LegStart(object):
     # 初始化赋值msg
     def initialize_msg(self, msg):
         self.msg = msg
-        self.short_path.clear()
-        self.short_move.clear()
-        self.short_length.clear()
-        self.wormhole.clear()
-        self.tunnel_go.clear()
-        self.graph = []    # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
-        self.tol_cells = 0
-        self.fa = []
+        # self.short_path.clear()
+        # self.short_move.clear()
+        # self.short_length.clear()
+        # self.wormhole.clear()
+        # self.tunnel_go.clear()
+        # self.graph = []    # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
+        # self.tol_cells = 0
+        # self.fa = []
         self.cell_vis_cnt.clear()
-
-    # 初始化所有的players
-    def create_players(self):
-        teams = self.msg['msg_data'].get("teams", [])
-        for team in teams:
-            team_id = team.get("id", -1)
-            if team_id == config.team_id:
-                players = team.get("players", [])
-                force = team.get("force", "NULL")
-                for player in players:
-                    mPlayers[player] = Player(
-                        fish_id=player, team_id=team_id, force=force)
-            else:
-                players = team.get("players", [])
-                force = team.get("force", "NULL")
-                for player in players:
-                    othPlayers[player] = Player(
-                        fish_id=player, team_id=team_id, force=force)
+        mPlayers.clear()
+        othPlayers.clear()
 
     def excute(self, msg):
         # 初始化赋值msg
@@ -375,7 +359,6 @@ class LegStart(object):
         self.create_graph()
         # 预处理所有传送带的位置，这个传送到可以直接到哪里
         self.init_tunnel_go()
-        self.create_players()
 
 
 mLegStart = LegStart()

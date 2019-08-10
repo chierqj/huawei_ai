@@ -6,7 +6,7 @@ from ballclient.utils.time_wapper import msimulog
 
 from ballclient.simulation.do_beat import mDoBeat
 from ballclient.simulation.do_think import mDoThink
-from ballclient.simulation.my_player import mPlayers, othPlayers
+from ballclient.simulation.my_player import mPlayers, othPlayers, Player
 from ballclient.simulation.my_power import Power
 
 
@@ -21,6 +21,7 @@ class Round(object):
             }
         }
         self.POWER_WAIT_SET = dict()
+        self.my_alive_player_num = 0
 
     # 暴露给service使用的，获取最终结果
     def get_result(self):
@@ -101,6 +102,7 @@ class Round(object):
     # 初始化赋值msg消息;更新fish和power集合
     def initialize_msg(self, msg):
         self.msg = msg
+        self.my_alive_player_num = 0
 
     # 更新players状态
     def initialize_players(self):
@@ -116,24 +118,52 @@ class Round(object):
             return
         players = self.msg['msg_data'].get('players', [])
         for player in players:
-            if player.get("team", -1) == config.team_id:
-                mPlayers[player['id']].assign(
-                    last_appear_dis=0,
-                    score=player['score'],
-                    sleep=(False if player['sleep'] == 0 else True),
-                    x=player['x'],
-                    y=player['y'],
-                    visiable=True
-                )
+            team_id = player.get("team", -1)
+            pid = player.get("id", -1)
+            if team_id == config.team_id:
+                if pid in mPlayers:
+                    mPlayers[pid].assign(
+                        last_appear_dis=0,
+                        score=player['score'],
+                        sleep=(False if player['sleep'] == 0 else True),
+                        x=player['x'],
+                        y=player['y'],
+                        visiable=True
+                    )
+                else:
+                    mPlayers[pid] = Player(
+                        fish_id=pid,
+                        team_id=team_id,
+                        force=self.msg['msg_data']['mode'],
+                        score=player['score'],
+                        sleep=(False if player['sleep'] == 0 else True),
+                        x=player['x'],
+                        y=player['y'],
+                        visiable=True,
+                        last_appear_dis=0
+                    )
             else:
-                othPlayers[player['id']].assign(
-                    last_appear_dis=0,
-                    score=player['score'],
-                    sleep=(False if player['sleep'] == 0 else True),
-                    x=player['x'],
-                    y=player['y'],
-                    visiable=True
-                )
+                if pid in othPlayers:
+                    othPlayers[pid].assign(
+                        last_appear_dis=0,
+                        score=player['score'],
+                        sleep=(False if player['sleep'] == 0 else True),
+                        x=player['x'],
+                        y=player['y'],
+                        visiable=True
+                    )
+                else:
+                    othPlayers[pid] = Player(
+                        fish_id=pid,
+                        team_id=team_id,
+                        force=self.msg['msg_data']['mode'],
+                        score=player['score'],
+                        sleep=(False if player['sleep'] == 0 else True),
+                        x=player['x'],
+                        y=player['y'],
+                        visiable=True,
+                        last_appear_dis=0
+                    )
 
     def update_power_wait_set(self):
         if False == self.check_power():

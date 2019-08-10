@@ -4,22 +4,22 @@ from ballclient.utils.logger import mLogger
 
 
 class Player(object):
-    def __init__(self, fish_id, team_id, force):
+    def __init__(self, fish_id, team_id, force, score, sleep, x, y, visiable, last_appear_dis):
         # 在legstart更新的变量
         self.id = fish_id
         self.team = team_id
         self.force = force
 
         # 在每一个round自身需要改变的
-        self.score = 0
-        self.sleep = True
-        self.x = -1
-        self.y = -1
-        self.visiable = False
+        self.score = score
+        self.sleep = sleep
+        self.x = x
+        self.y = y
+        self.visiable = visiable
         self.target = None
 
         # 奖惩相关的变量
-        self.last_appear_dis = 600
+        self.last_appear_dis = last_appear_dis
 
     def initialize(self):
         self.sleep = True

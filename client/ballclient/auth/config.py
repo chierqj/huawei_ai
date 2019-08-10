@@ -24,14 +24,14 @@ record_detial = True
 # 能量系数
 BEAT_POWER_WEIGHT = 1.0
 # 敌方的鱼的系数
-BEAT_PLAYER_WEIGHT = 1.5
+BEAT_PLAYER_WEIGHT = -4.0
 
 
 THINK_POWER_WEIGHT = 1.0
-THINK_PLAYER_WEIGHT = 1.2
+THINK_PLAYER_WEIGHT = 0.0
 
 # 每个格子避免重复走累加的数字
-CELL_WEIGHT = 0.001
+CELL_WEIGHT = 0.01
 # last_appear_dis的衰变系数 += last_appear_dis * ALPHA
 ALPHA = 0.8
 # delta;player在计算出来的距离上面减去多少，因为怕被吃

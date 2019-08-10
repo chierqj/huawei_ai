@@ -4,7 +4,7 @@ from ballclient.simulation.my_leg_start import mLegStart
 from ballclient.utils.logger import mLogger
 from ballclient.utils.time_wapper import msimulog
 from ballclient.auth import config
-from ballclient.simulation.my_player import mPlayers, othPlayers
+from ballclient.simulation.my_player import mPlayers, othPlayers, Player
 from ballclient.simulation.my_power import Power
 import random
 import math
@@ -26,7 +26,7 @@ class DoBeat():
             player.id, player.x, player.y, move))
 
     # 获取下一步移动的位置，仅判断是不是合法
-    def get_next_one_points(self, player):
+    def get_next_one_points(self, player, vis_point):
         moves = ['up', 'down', 'left', 'right']
         result = []
         for move in moves:
@@ -38,8 +38,25 @@ class DoBeat():
                 continue
             if go_x == player.x and go_y == player.y:
                 continue
+            go_cell_id = mLegStart.get_cell_id(go_x, go_y)
+            if go_cell_id in vis_point:
+                continue
             result.append((move, go_x, go_y))
         return result
+
+    # # 获取这个位置的联通的出口有几个
+    # def get_exit_num(self, player, go_x, go_y):
+    #     tmp_player = Player(-1, -1, -1)
+    #     tmp_player.x, tmp_player.y = go_x, go_y
+    #     tmp_next = self.get_next_one_points(tmp_player)
+    #     ans = 0
+    #     for it in tmp_next:
+    #         if it[1] == go_x and it[2] == go_y:
+    #             continue
+    #         if it[1] == player.x and it[2] == player.y:
+    #             continue
+    #         ans += 1
+    #     return ans
 
     # 初始化评分
     def initial_weight_moves(self):
@@ -52,19 +69,30 @@ class DoBeat():
     3. 其他玩家
     '''
 
-    def reward_power(self, move, px, py):
+    def reward_power(self, player, move, px, py):
+        max_weight, sum_weight = 0, 0
         for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
-            dis = mLegStart.get_short_length(px, py, power.x, power.y) + 1
+            if power.visiable == False:
+                continue
+            # 我到金币的
+            dis = mLegStart.get_short_length(px, py, power.x, power.y)
 
-            weight = 1.0 / math.exp(dis + power.last_appear_dis * 0.5)
-            nweight = self.weight_moves.get(move, 0)
+            dis += power.last_appear_dis * config.ALPHA
 
-            self.weight_moves[move] = float(
-                "%.6f" % (nweight + weight * config.POWER_WEIGHT))
+            weight = 1.0 / math.exp(dis)
 
-    def reward_weight(self, next_one_points):
+            max_weight = max(max_weight, weight)
+            sum_weight += weight
+
+        max_weight *= config.BEAT_POWER_WEIGHT
+        sum_weight *= config.BEAT_POWER_WEIGHT
+
+        nweight = self.weight_moves.get(move, 0)
+        self.weight_moves[move] = float("%.10f" % (nweight + sum_weight))
+
+    def reward_weight(self, player, next_one_points):
         for move, go_x, go_y in next_one_points:
-            self.reward_power(move, go_x, go_y)
+            self.reward_power(player, move, go_x, go_y)
 
     '''
     惩罚评分：
@@ -74,17 +102,28 @@ class DoBeat():
     4. 金币周围情况
     '''
 
-    def punish_player(self, move, px, py):
-        for k, player in othPlayers.iteritems():
-            if player.x == -1 or player.y == -1:
-                continue
-            dis = mLegStart.get_short_length(player.x, player.y, px, py) + 1
+    def punish_player(self, player, move, px, py):
+        max_weight, sum_weight = 0, 0
+        for k, oth_player in othPlayers.iteritems():
+            # 敌人到我的，敌人要吃我
+            dis = mLegStart.get_short_length(
+                oth_player.x, oth_player.y, px, py)
 
-            weight = 1.0 / math.exp(dis + player.last_appear_dis * 0.1)
-            nweight = self.weight_moves.get(move, 0)
+            dis += oth_player.last_appear_dis * config.ALPHA
 
-            self.weight_moves[move] = float(
-                "%.6f" % (nweight - weight * config.PLAYER_WEIGHT))
+            weight = 1.0 / math.exp(dis)
+
+            max_weight = max(max_weight, weight)
+            sum_weight += weight
+            # mLogger.info(oth_player.last_appear_dis)
+            # mLogger.debug("my_id: {}; my_point: ({}, {}); move: {}; oth_fish_id: {}; oth_point: ({}, {}); dis: {}".format(
+            #     player.id, px, py, move, oth_player.id, oth_player.x, oth_player.y, dis))
+
+        max_weight *= config.BEAT_PLAYER_WEIGHT
+        sum_weight *= config.BEAT_PLAYER_WEIGHT
+
+        nweight = self.weight_moves.get(move, 0)
+        self.weight_moves[move] = float("%.10f" % (nweight + sum_weight))
 
     def punish_cell(self, move, px, py):
         cell_id = mLegStart.get_cell_id(px, py)
@@ -94,11 +133,11 @@ class DoBeat():
         nweight = self.weight_moves.get(move, 0)
 
         self.weight_moves[move] = float(
-            "%.6f" % (nweight - weight * config.CELL_WEIGHT))
+            "%.10f" % (nweight - weight * config.CELL_WEIGHT))
 
-    def punish_weight(self, next_one_points):
+    def punish_weight(self, player, next_one_points):
         for move, go_x, go_y in next_one_points:
-            self.punish_player(move, go_x, go_y)
+            self.punish_player(player, move, go_x, go_y)
             self.punish_cell(move, go_x, go_y)
 
     # 挑选一个评分最高的move
@@ -110,23 +149,32 @@ class DoBeat():
         return ret_move
 
     # 对每一个玩家开始执行
-    def do_excute(self, player):
-        next_one_points = self.get_next_one_points(player)
+    def do_excute(self, player, vis_point):
+        next_one_points = self.get_next_one_points(player, vis_point)
+        if len(next_one_points) == 0:
+            return ""
+
         self.initial_weight_moves()
-        self.reward_weight(next_one_points)
-        self.punish_weight(next_one_points)
+        self.reward_weight(player, next_one_points)
+        self.punish_weight(player, next_one_points)
+
         ret_move = self.select_best_move()
+        ret_x, ret_y = self.mRoundObj.real_go_point(
+            player.x, player.y, ret_move)
+        ret_cell_id = mLegStart.get_cell_id(ret_x, ret_y)
+        vis_point.add(ret_cell_id)
         self.record_detial(player, ret_move)
         return ret_move
 
     def excute(self, mRoundObj):
         self.mRoundObj = mRoundObj
         action = list()
+        vis_point = set()
         for k, player in mPlayers.iteritems():
             action.append({
                 "team": player.team,
                 "player_id": player.id,
-                "move": [self.do_excute(player)]
+                "move": [self.do_excute(player, vis_point)]
             })
         return action
 
