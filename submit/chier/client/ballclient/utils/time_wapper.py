@@ -13,13 +13,13 @@ def msimulog(text=''):
         def wrapper(*args, **kwargs):
             t_begin = time.time()
             st_info = text + '[%s start]' % (fn.__name__)
-            mLogger.info(st_info)
+            mLogger.debug(st_info)
             res = fn(*args, **kwargs)
             t_end = time.time()
             ex_t = '%.3f' % ((t_end - t_begin) * 1000)
             ed_info = text + \
                 '[{} end] [executed: {}ms]'.format(fn.__name__, ex_t)
-            mLogger.info(ed_info)
+            mLogger.debug(ed_info)
             return res
         return wrapper
     return metric

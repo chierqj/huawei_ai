@@ -13,42 +13,19 @@ import math
 class DoBeat():
     def __init__(self):
         self.mRoundObj = ""
-
-        # 被吃的8个方向，顺带自己这个格子。总共9个
-        # self.dinger_dirs = [(-1, -1), (0, -1), (1, -1), (-1, 0),
-        #                     (1, 0), (-1, 1), (0, 1), (1, 1), (0, 0)]
-        # 被吃的4个方向，顺带自己这个格子。总共5个
         self.dinger_dirs = [(0, -1), (-1, 0), (1, 0), (0, 1), (0, 0)]
-        # 被吃的1个方向，即就是下一步在的位置
-        # self.dinger_dirs = [(0, 0)]
         self.weight_moves = dict()
 
-    # 获取两点的曼哈顿距离
-    def get_dis(self, x1, y1, x2, y2):
-        return abs(x1 - x2) + abs(y1 - y2)
+    # 打印详细log
+    def record_detial(self, player, move):
+        if False == config.record_detial or None == move:
+            return
 
-    # 计算要吃的金币周围有几个空位
-    def cal_empty_block(self, px, py):
-        result = 0
-        for adx, ady in self.dinger_dirs:
-            x, y = px + adx, py + ady
-            if px == x and py == y:
-                continue
-            if True == self.mRoundObj.match_border(x, y):
-                if False == self.mRoundObj.match_meteor(x, y):
-                    result += 1
-        return result
+        mLogger.info(self.weight_moves)
+        mLogger.info('[fish: {}, from: ({}, {}), move: {}]'.format(
+            player.id, player.x, player.y, move))
 
-    # 判断px, py这个位置能不能被吃，True表示能被吃
-    def match_beat_eated(self, px, py):
-        for player in self.mRoundObj.msg['msg_data']['players']:
-            if player['team'] != config.team_id:
-                for x, y in self.dinger_dirs:
-                    nx, ny = player['x'] + x, player['y'] + y
-                    if nx == px and ny == py:
-                        return True
-        return False
-
+    # 获取下一步移动的位置，仅判断是不是合法
     def get_next_one_points(self, player):
         moves = ['up', 'down', 'left', 'right']
         result = []
@@ -62,87 +39,78 @@ class DoBeat():
             result.append((move, go_x, go_y))
         return result
 
-    def initial_weight_moves(self, next_one_points):
+    # 初始化评分
+    def initial_weight_moves(self):
         self.weight_moves.clear()
-        for move, go_x, go_y in next_one_points:
-            self.weight_moves[move] = 0
+
+    '''
+    奖励评分：
+    1. 金币
+    2. 虫洞
+    3. 其他玩家
+    '''
 
     def reward_power(self, move, px, py):
         for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
-            dis = mLegStart.get_short_length(px, py, power.x, power.y)
-            cell_id = mLegStart.get_cell_id(power.x, power.y)
-            # if dis == 0:
-            #     mLogger.info("我的鱼已经挨着金币了")
-            #     dis = 0.5
-            weight = 1 / math.exp(dis)
-            nweight = self.weight_moves.get(move, 0)
-            self.weight_moves[move] = float("%.4f" % (nweight + weight))
+            dis = mLegStart.get_short_length(px, py, power.x, power.y) + 1
 
-    def reward_wormhole(self, move, px, py):
-        if False == self.mRoundObj.check_wormhole():
-            return
-        for wormhole in mLegStart.msg['msg_data']['map']['wormhole']:
-            dis = mLegStart.get_short_length(
-                px, py, wormhole['x'], wormhole['y'])
-            cell_id = mLegStart.get_cell_id(wormhole['x'], wormhole['y'])
-            # if dis == 0:
-            #     mLogger.info("我的鱼身处虫洞上面")
-            #     dis = 0.25
-            weight = 1 / math.exp(dis)
+            weight = 1.0 / (dis + power.last_appear_dis * 0.2)
             nweight = self.weight_moves.get(move, 0)
-            self.weight_moves[move] = float("%.4f" % (nweight + weight))
 
-    def reward_player(self, move, px, py):
-        pass
+            self.weight_moves[move] = float(
+                "%.6f" % (nweight + weight * config.POWER_WEIGHT))
 
     def reward_weight(self, next_one_points):
         for move, go_x, go_y in next_one_points:
             self.reward_power(move, go_x, go_y)
-            self.reward_player(move, go_x, go_y)
-            self.reward_wormhole(move, go_x, go_y)
 
-    def punish_power(self, move, px, py):
-        pass
+    '''
+    惩罚评分：
+    1. 其他玩家
+    2. 之前是否走过（很小的权重，避免原地打转用的） 
+    3. 障碍物
+    4. 金币周围情况
+    '''
 
     def punish_player(self, move, px, py):
         for k, player in othPlayers.iteritems():
             if player.x == -1 or player.y == -1:
                 continue
-            dis = mLegStart.get_short_length(px, py, player.x, player.y)
-            cell_id = mLegStart.get_cell_id(player.x, player.y)
-            if dis == 0:
-                mLogger.info("敌方的鱼已经挨着我的鱼了")
-            if player.last_appear_dis == 0:
-                weight = 1 / math.exp(dis)
-            else:
-                weight = 1 / math.exp(dis) + 1 / player.last_appear_dis
+            dis = mLegStart.get_short_length(player.x, player.y, px, py) + 1
+
+            weight = 1.0 / (dis + player.last_appear_dis * 0.2)
             nweight = self.weight_moves.get(move, 0)
-            self.weight_moves[move] = float("%.4f" % (nweight - weight))
+
+            self.weight_moves[move] = float(
+                "%.6f" % (nweight - weight * config.PLAYER_WEIGHT))
+
+    def punish_cell(self, move, px, py):
+        cell_id = mLegStart.get_cell_id(px, py)
+        vis_cnt = mLegStart.cell_vis_cnt.get(cell_id, 0)
+
+        weight = vis_cnt
+        nweight = self.weight_moves.get(move, 0)
+
+        self.weight_moves[move] = float(
+            "%.6f" % (nweight - weight * config.CELL_WEIGHT))
 
     def punish_weight(self, next_one_points):
         for move, go_x, go_y in next_one_points:
-            self.punish_power(move, go_x, go_y)
             self.punish_player(move, go_x, go_y)
+            self.punish_cell(move, go_x, go_y)
 
+    # 挑选一个评分最高的move
     def select_best_move(self):
         max_weight, ret_move = None, None
         for move, weight in self.weight_moves.iteritems():
             if max_weight == None or weight > max_weight:
                 max_weight, ret_move = weight, move
-        mLogger.info("{}, {}".format(ret_move, max_weight))
         return ret_move
 
-    def record_detial(self, player, move):
-        if False == config.record_detial or None == move:
-            return
-
-        mLogger.info(self.weight_moves)
-        mLogger.info('[fish: {}, from: ({}, {}), move: {}]'.format(
-            player.id, player.x, player.y, move))
-
+    # 对每一个玩家开始执行
     def do_excute(self, player):
         next_one_points = self.get_next_one_points(player)
-        self.initial_weight_moves(next_one_points)
+        self.initial_weight_moves()
         self.reward_weight(next_one_points)
         self.punish_weight(next_one_points)
         ret_move = self.select_best_move()

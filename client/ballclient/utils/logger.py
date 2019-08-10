@@ -10,8 +10,10 @@ class Logger:
     def __init__(self, path=config.log_file_path, clevel=logging.DEBUG, Flevel=logging.DEBUG):
         self.logger = logging.getLogger(path)
         self.logger.setLevel(logging.DEBUG)
+        # fmt = logging.Formatter(
+        #     '[%(asctime)s] [%(filename)s:%(lineno)d] [%(levelname)s] - %(message)s', '%H:%M:%S')
         fmt = logging.Formatter(
-            '[%(asctime)s] [%(filename)s:%(lineno)d] [%(levelname)s] - %(message)s', '%H:%M:%S')
+            '[%(levelname)s] - %(message)s')
 
         # 设置CMD日志
         sh = logging.StreamHandler()

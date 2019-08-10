@@ -19,6 +19,7 @@ class LegStart(object):
         self.direction = ['down', 'up', 'right', 'left']
         self.tol_cells = 0
         self.fa = []
+        self.cell_vis_cnt = dict()
 
     # 更新最短路径的二维字典，u-v的路径是个list
     def update_short_path_dict(self, key1, key2, value):
@@ -255,8 +256,10 @@ class LegStart(object):
     # 暴露给其它地方用的获取两个点之间的最短路径，再config配置中需要打开
     def get_short_length(self, x1, y1, x2, y2):
         if self.out_graph_border(x1, y1):
+            mLogger.warning("start_point: ({}, {})越界了".format(x1, y1))
             return None
         if self.out_graph_border(x2, y2):
+            mLogger.warning("end_point: ({}, {})越界了".format(x2, y2))
             return None
 
         pid1 = self.get_cell_id(x1, y1)
@@ -330,6 +333,15 @@ class LegStart(object):
     # 初始化赋值msg
     def initialize_msg(self, msg):
         self.msg = msg
+        self.short_path.clear()
+        self.short_move.clear()
+        self.short_length.clear()
+        self.wormhole.clear()
+        self.tunnel_go.clear()
+        self.graph = []    # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
+        self.tol_cells = 0
+        self.fa = []
+        self.cell_vis_cnt.clear()
 
     # 初始化所有的players
     def create_players(self):
@@ -349,7 +361,6 @@ class LegStart(object):
                     othPlayers[player] = Player(
                         fish_id=player, team_id=team_id, force=force)
 
-    @msimulog("LegStart")
     def excute(self, msg):
         # 初始化赋值msg
         self.initialize_msg(msg)
@@ -365,9 +376,6 @@ class LegStart(object):
         # 预处理所有传送带的位置，这个传送到可以直接到哪里
         self.init_tunnel_go()
         self.create_players()
-
-        # st = self.get_cell_id(19, 11)
-        # self.create_short_path(st)
 
 
 mLegStart = LegStart()

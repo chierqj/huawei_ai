@@ -24,7 +24,7 @@ def leg_start(msg):
         mLogger.error(e)
 
 
-# @msimulog()
+@msimulog()
 def round(msg):
     try:
         mRound.excute(msg)

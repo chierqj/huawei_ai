@@ -13,8 +13,10 @@ from ballclient.simulation.my_round import mRound
 from ballclient.simulation.my_leg_end import mLegEnd
 from ballclient.simulation.my_game_over import mGameOver
 from ballclient.utils.logger import mLogger
+from ballclient.utils.time_wapper import msimulog
 
 
+@msimulog()
 def leg_start(msg):
     try:
         mLegStart.excute(msg)
@@ -22,6 +24,7 @@ def leg_start(msg):
         mLogger.error(e)
 
 
+@msimulog()
 def round(msg):
     try:
         mRound.excute(msg)
@@ -30,6 +33,7 @@ def round(msg):
         mLogger.error(e)
 
 
+@msimulog()
 def leg_end(msg):
     try:
         mLegEnd.excute(msg)
@@ -37,6 +41,7 @@ def leg_end(msg):
         mLogger.error(e)
 
 
+@msimulog()
 def game_over(msg):
     try:
         mGameOver.excute(msg)

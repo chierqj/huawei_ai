@@ -21,7 +21,6 @@ class Round(object):
             }
         }
         self.POWER_WAIT_SET = dict()
-        self.WORMHOLE_SET = list()
 
     # 暴露给service使用的，获取最终结果
     def get_result(self):
@@ -95,7 +94,7 @@ class Round(object):
             action = mDoBeat.excute(self)
         else:
             action = mDoBeat.excute(self)
-            # action = mDoThink.excute(self?)
+            # action = mDoThink.excute(self)
 
         self.result['msg_data']['actions'] = action
 
@@ -113,6 +112,8 @@ class Round(object):
             value.update_last_appear()
 
     def update_player_wait_set(self):
+        if False == self.check_players():
+            return
         players = self.msg['msg_data'].get('players', [])
         for player in players:
             if player.get("team", -1) == config.team_id:
@@ -137,10 +138,8 @@ class Round(object):
     def update_power_wait_set(self):
         if False == self.check_power():
             return
-
         for k, v in self.POWER_WAIT_SET.iteritems():
             v.update_last_appear()
-
         for power in self.msg['msg_data']['power']:
             cell_id = mLegStart.get_cell_id(power['x'], power['y'])
             if cell_id in self.POWER_WAIT_SET:
@@ -160,16 +159,29 @@ class Round(object):
                     visiable=True
                 )
 
+    def update_cell_vis_cnt(self):
+        for k, player in mPlayers.iteritems():
+            if player.sleep == False:
+                cell_id = mLegStart.get_cell_id(player.x, player.y)
+                num = mLegStart.cell_vis_cnt.get(cell_id, 0)
+                mLegStart.cell_vis_cnt[cell_id] = num + 1
+            else:
+                mLogger.warning("[fish: {}; point: ({}, {})] 睡眠了，被吃了".format(
+                    player.id, player.x, player.y))
+
+    def print_log(self):
+        round_id = self.msg['msg_data']['round_id']
+        mLogger.info(
+            "\n\n-------------------------[round: {}]-------------------------\n".format(round_id))
+
     # 程序入口
     def excute(self, msg):
         self.initialize_msg(msg)
-        round_id = self.msg['msg_data']['round_id']
-        mLogger.info("\n\n-------------------------[round: {}]-------------------------\n".format(round_id))
-        if False == self.check_players():
-            return
+        self.print_log()
         self.initialize_players()
         self.update_player_wait_set()
         self.update_power_wait_set()
+        self.update_cell_vis_cnt()
         self.make_action()
 
 

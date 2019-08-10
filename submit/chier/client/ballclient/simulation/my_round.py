@@ -7,6 +7,7 @@ from ballclient.utils.time_wapper import msimulog
 from ballclient.simulation.do_beat import mDoBeat
 from ballclient.simulation.do_think import mDoThink
 from ballclient.simulation.my_player import mPlayers, othPlayers
+from ballclient.simulation.my_power import Power
 
 
 class Round(object):
@@ -19,8 +20,7 @@ class Round(object):
                 "actions": []
             }
         }
-        self.direction = {1: 'right', 2: 'up', 3: 'left', 4: 'down'}
-        self.beat = []
+        self.POWER_WAIT_SET = dict()
 
     # 暴露给service使用的，获取最终结果
     def get_result(self):
@@ -78,7 +78,7 @@ class Round(object):
         if mLegStart.match_tunnel(go_cell):
             go_cell_id = mLegStart.get_cell_id(go_x, go_y)
             go_x, go_y = mLegStart.get_x_y(mLegStart.do_tunnel(go_cell_id))
-        if go_cell.isalpha():
+        if mLegStart.match_wormhole(go_cell):
             go_x, go_y = mLegStart.get_x_y(mLegStart.do_wormhoe(go_cell))
         return go_x, go_y
 
@@ -87,39 +87,101 @@ class Round(object):
         # 检查用的变量是否存在
         self.result["msg_data"]["round_id"] = self.msg['msg_data'].get(
             'round_id', None)
-        if False == self.check_players():
-            return
 
-        # 遍历players，获取自己的鱼和对方的鱼
-        players = self.msg['msg_data'].get('players', [])
-        for player in players:
-            if player.get("team", -1) == config.team_id:
-                mPlayers[player['id']].assign(
-                    player['score'], player['sleep'], player['x'], player['y'])
-            else:
-                othPlayers[player['id']].assign(
-                    player['score'], player['sleep'], player['x'], player['y'])
         # 调用函数获取action
         action = []
         if self.msg['msg_data']['mode'] == "beat":
             action = mDoBeat.excute(self)
         else:
-            # action = mDoBeat.excute(self)
-            action = mDoThink.excute(self)
+            action = mDoBeat.excute(self)
+            # action = mDoThink.excute(self)
 
         self.result['msg_data']['actions'] = action
 
-    # 初始化赋值msg消息
+    # 初始化赋值msg消息;更新fish和power集合
     def initialize_msg(self, msg):
         self.msg = msg
+
+    # 更新players状态
+    def initialize_players(self):
         for k, value in mPlayers.iteritems():
             value.initialize()
+            value.update_last_appear()
         for k, value in othPlayers.iteritems():
             value.initialize()
+            value.update_last_appear()
+
+    def update_player_wait_set(self):
+        if False == self.check_players():
+            return
+        players = self.msg['msg_data'].get('players', [])
+        for player in players:
+            if player.get("team", -1) == config.team_id:
+                mPlayers[player['id']].assign(
+                    last_appear_dis=0,
+                    score=player['score'],
+                    sleep=(False if player['sleep'] == 0 else True),
+                    x=player['x'],
+                    y=player['y'],
+                    visiable=True
+                )
+            else:
+                othPlayers[player['id']].assign(
+                    last_appear_dis=0,
+                    score=player['score'],
+                    sleep=(False if player['sleep'] == 0 else True),
+                    x=player['x'],
+                    y=player['y'],
+                    visiable=True
+                )
+
+    def update_power_wait_set(self):
+        if False == self.check_power():
+            return
+        for k, v in self.POWER_WAIT_SET.iteritems():
+            v.update_last_appear()
+        for power in self.msg['msg_data']['power']:
+            cell_id = mLegStart.get_cell_id(power['x'], power['y'])
+            if cell_id in self.POWER_WAIT_SET:
+                self.POWER_WAIT_SET[cell_id].assign(
+                    last_appear_dis=0,
+                    x=power['x'],
+                    y=power['y'],
+                    point=power['point'],
+                    visiable=True
+                )
+            else:
+                self.POWER_WAIT_SET[cell_id] = Power(
+                    last_appear_dis=0,
+                    x=power['x'],
+                    y=power['y'],
+                    point=power['point'],
+                    visiable=True
+                )
+
+    def update_cell_vis_cnt(self):
+        for k, player in mPlayers.iteritems():
+            if player.sleep == False:
+                cell_id = mLegStart.get_cell_id(player.x, player.y)
+                num = mLegStart.cell_vis_cnt.get(cell_id, 0)
+                mLegStart.cell_vis_cnt[cell_id] = num + 1
+            else:
+                mLogger.warning("[fish: {}; point: ({}, {})] 睡眠了，被吃了".format(
+                    player.id, player.x, player.y))
+
+    def print_log(self):
+        round_id = self.msg['msg_data']['round_id']
+        mLogger.info(
+            "\n\n-------------------------[round: {}]-------------------------\n".format(round_id))
 
     # 程序入口
     def excute(self, msg):
         self.initialize_msg(msg)
+        self.print_log()
+        self.initialize_players()
+        self.update_player_wait_set()
+        self.update_power_wait_set()
+        self.update_cell_vis_cnt()
         self.make_action()
 
 

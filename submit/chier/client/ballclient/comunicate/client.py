@@ -9,6 +9,7 @@ import json
 
 from ballclient.comunicate import service
 from ballclient.auth import config
+from ballclient.utils.time_wapper import msimulog
 
 _socket = None
 
@@ -75,7 +76,6 @@ def register():
                          "team_id": config.team_id}}
 
     send_dict(data)
-
 
 def send_dict(data):
     data_str = json.dumps(data)
