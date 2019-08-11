@@ -21,6 +21,9 @@ class Player(object):
         # 奖惩相关的变量
         self.last_appear_dis = last_appear_dis
 
+        # 走过的路
+        self.vis_cell = set()
+
     def initialize(self):
         self.sleep = True
 

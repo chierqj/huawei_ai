@@ -20,6 +20,7 @@ class Round(object):
                 "actions": []
             }
         }
+        self.force = None
         self.POWER_WAIT_SET = dict()
         self.my_alive_player_num = 0
 
@@ -94,8 +95,8 @@ class Round(object):
         if self.msg['msg_data']['mode'] == "beat":
             action = mDoBeat.excute(self)
         else:
-            action = mDoBeat.excute(self)
-            # action = mDoThink.excute(self)
+            # action = mDoBeat.excute(self)
+            action = mDoThink.excute(self)
 
         self.result['msg_data']['actions'] = action
 
@@ -142,6 +143,7 @@ class Round(object):
                         visiable=True,
                         last_appear_dis=0
                     )
+                self.my_alive_player_num += 1
             else:
                 if pid in othPlayers:
                     othPlayers[pid].assign(
@@ -166,10 +168,10 @@ class Round(object):
                     )
 
     def update_power_wait_set(self):
-        if False == self.check_power():
-            return
         for k, v in self.POWER_WAIT_SET.iteritems():
             v.update_last_appear()
+        if False == self.check_power():
+            return
         for power in self.msg['msg_data']['power']:
             cell_id = mLegStart.get_cell_id(power['x'], power['y'])
             if cell_id in self.POWER_WAIT_SET:
@@ -189,20 +191,20 @@ class Round(object):
                     visiable=True
                 )
 
-    def update_cell_vis_cnt(self):
-        for k, player in mPlayers.iteritems():
-            if player.sleep == False:
-                cell_id = mLegStart.get_cell_id(player.x, player.y)
-                num = mLegStart.cell_vis_cnt.get(cell_id, 0)
-                mLegStart.cell_vis_cnt[cell_id] = num + 1
-            else:
-                mLogger.warning("[fish: {}; point: ({}, {})] 睡眠了，被吃了".format(
-                    player.id, player.x, player.y))
-
     def print_log(self):
         round_id = self.msg['msg_data']['round_id']
         mLogger.info(
             "\n\n-------------------------[round: {}]-------------------------\n".format(round_id))
+
+    def update_vis_set(self):
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                player.vis_cell.clear()
+                mLogger.warning("fish: {}; point: ({}, {})睡眠，被吃了".format(
+                    player.id, player.x, player.y))
+            else:
+                cell_id = mLegStart.get_cell_id(player.x, player.y)
+                player.vis_cell.add(cell_id)
 
     # 程序入口
     def excute(self, msg):
@@ -211,7 +213,7 @@ class Round(object):
         self.initialize_players()
         self.update_player_wait_set()
         self.update_power_wait_set()
-        self.update_cell_vis_cnt()
+        self.update_vis_set()
         self.make_action()
 
 

@@ -19,7 +19,6 @@ class LegStart(object):
         self.direction = ['down', 'up', 'right', 'left']
         self.tol_cells = 0
         self.fa = []
-        self.cell_vis_cnt = dict()
 
     # 更新最短路径的二维字典，u-v的路径是个list
     def update_short_path_dict(self, key1, key2, value):
@@ -333,15 +332,14 @@ class LegStart(object):
     # 初始化赋值msg
     def initialize_msg(self, msg):
         self.msg = msg
-        # self.short_path.clear()
-        # self.short_move.clear()
-        # self.short_length.clear()
-        # self.wormhole.clear()
-        # self.tunnel_go.clear()
-        # self.graph = []    # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
-        # self.tol_cells = 0
-        # self.fa = []
-        self.cell_vis_cnt.clear()
+        self.short_path.clear()
+        self.short_move.clear()
+        self.short_length.clear()
+        self.wormhole.clear()
+        self.tunnel_go.clear()
+        self.graph = []    # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
+        self.tol_cells = 0
+        self.fa = []
         mPlayers.clear()
         othPlayers.clear()
 
