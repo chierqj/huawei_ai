@@ -19,7 +19,7 @@ start gameclient.bat 6666 127.0.0.1 6001
 popd
 
 
-REM pushd %CD%
-REM cd /d "ui"
-REM start nw.bat
-REM popd
+pushd %CD%
+cd /d "ui"
+start nw.bat
+popd

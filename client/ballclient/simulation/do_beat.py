@@ -20,24 +20,26 @@ class DoBeat(Action):
         for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
             # 我到金币的
             dis = mLegStart.get_short_length(px, py, power.x, power.y)
-            weight = 1.0 / math.exp(dis)
+            weight = float("%.5f" % (1.0 / math.exp(dis)))
 
             if power.visiable == False:
                 dis = config.POWER_ALPHA * dis + config.POWER_BELAT * power.last_appear_dis
-                weight = 0.0 if dis == 0 else 1.0 / math.exp(dis)
+                weight = 0.0 if dis == 0 else float(
+                    "%.5f" % (1.0 / math.exp(dis)))
 
             max_weight = max(max_weight, weight)
             sum_weight += weight
 
-            mLogger.info("{} [my_fish: {}; point: ({}, {});] [power_value: {}; point: ({}, {})] [dis: {}] [weight: {:.10f}]".format(
-                move, player.id, player.x, player.y, power.point, power.x, power.y, dis, weight))
+            if config.record_weight == True:
+                mLogger.info("{} [my_fish: {}; point: ({}, {});] [power_value: {}; point: ({}, {})] [dis: {}] [weight: {:.5f}]".format(
+                    move, player.id, player.x, player.y, power.point, power.x, power.y, dis, weight))
 
         max_weight *= config.BEAT_POWER_WEIGHT
         sum_weight *= config.BEAT_POWER_WEIGHT
 
         nweight = self.weight_moves.get(move, 0)
-        self.weight_moves[move] = float("%.10f" % (nweight + sum_weight))
-        # self.weight_moves[move] = float("%.10f" % (nweight + max_weight))
+        self.weight_moves[move] = float("%.5f" % (nweight + sum_weight))
+        # self.weight_moves[move] = float("%.5f" % (nweight + max_weight))
 
     def reward_weight(self, player, next_one_points):
         for move, go_x, go_y in next_one_points:
@@ -47,11 +49,13 @@ class DoBeat(Action):
         cell_id = mLegStart.get_cell_id(px, py)
         if cell_id in player.vis_cell:
             nweight = self.weight_moves.get(move, 0)
-            mLogger.info("{} [my_fish: {}; point: ({}, {});] [vis_cell_point: ({}, {})] [weight: {:.10f}]".format(
-                move, player.id, player.x, player.y, px, py, config.CELL_WEIGHT))
 
             self.weight_moves[move] = float(
-                "%.10f" % (nweight - config.CELL_WEIGHT))
+                "%.5f" % (nweight - config.CELL_WEIGHT))
+
+            if config.record_weight == True:
+                mLogger.info("{} [my_fish: {}; point: ({}, {});] [vis_cell_point: ({}, {})] [weight: {:.5f}]".format(
+                    move, player.id, player.x, player.y, px, py, config.CELL_WEIGHT))
 
     def punish_player(self, player, move, px, py):
         max_weight, sum_weight = 0, 0
@@ -59,24 +63,26 @@ class DoBeat(Action):
             # 敌人到我的，敌人要吃我
             dis = mLegStart.get_short_length(
                 oth_player.x, oth_player.y, px, py)
-            weight = 1.0 / math.exp(dis)
+            weight = float("%.5f" % (1.0 / math.exp(dis)))
 
             if oth_player.visiable == False:
                 dis = config.PLAYER_ALPHA * dis + config.PLAYER_BELTA * oth_player.last_appear_dis
-                weight = 0.0 if dis == 0 else 1.0 / math.exp(dis)
+                weight = 0.0 if dis == 0 else float(
+                    "%.5f" % (1.0 / math.exp(dis)))
 
             max_weight = max(max_weight, weight)
             sum_weight += weight
 
-            mLogger.info("{} [my_fish: {}; point: ({}, {});] [othfish: {}; point: ({}, {})] [dis: {}] [weight: {:.10f}]".format(
-                move, player.id, player.x, player.y, oth_player.id, oth_player.x, oth_player.y, dis, weight))
+            if config.record_weight == True:
+                mLogger.info("{} [my_fish: {}; point: ({}, {});] [othfish: {}; point: ({}, {})] [dis: {}] [weight: {:.5f}]".format(
+                    move, player.id, player.x, player.y, oth_player.id, oth_player.x, oth_player.y, dis, weight))
 
         max_weight *= config.BEAT_PLAYER_WEIGHT
         sum_weight *= config.BEAT_PLAYER_WEIGHT
 
         nweight = self.weight_moves.get(move, 0)
-        self.weight_moves[move] = float("%.10f" % (nweight + sum_weight))
-        # self.weight_moves[move] = float("%.10f" % (nweight + max_weight))
+        self.weight_moves[move] = float("%.5f" % (nweight + sum_weight))
+        # self.weight_moves[move] = float("%.5f" % (nweight + max_weight))
 
     def punish_weight(self, player, next_one_points):
         for move, go_x, go_y in next_one_points:
