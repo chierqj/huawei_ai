@@ -1,13 +1,12 @@
 # coding: utf-8
 from ballclient.auth import config
-from ballclient.simulation.my_leg_start import mLegStart
-from ballclient.utils.logger import mLogger
-from ballclient.utils.time_wapper import msimulog
-
 from ballclient.simulation.do_beat import mDoBeat
 from ballclient.simulation.do_think import mDoThink
-from ballclient.simulation.my_player import mPlayers, othPlayers, Player
+from ballclient.simulation.my_leg_start import mLegStart
+from ballclient.simulation.my_player import Player, mPlayers, othPlayers
 from ballclient.simulation.my_power import Power
+from ballclient.utils.logger import mLogger
+from ballclient.utils.time_wapper import msimulog
 
 
 class Round(object):

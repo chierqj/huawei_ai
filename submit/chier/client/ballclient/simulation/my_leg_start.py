@@ -342,6 +342,7 @@ class LegStart(object):
         self.fa = []
         mPlayers.clear()
         othPlayers.clear()
+        mLogger.info(self.msg)
 
     def excute(self, msg):
         # 初始化赋值msg

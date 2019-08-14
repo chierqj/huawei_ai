@@ -1,14 +1,15 @@
 # coding: utf-8
 
+import math
+import random
+
+from ballclient.auth import config
+from ballclient.simulation.my_action import Action
 from ballclient.simulation.my_leg_start import mLegStart
+from ballclient.simulation.my_player import Player, mPlayers, othPlayers
+from ballclient.simulation.my_power import Power
 from ballclient.utils.logger import mLogger
 from ballclient.utils.time_wapper import msimulog
-from ballclient.auth import config
-from ballclient.simulation.my_player import mPlayers, othPlayers, Player
-from ballclient.simulation.my_power import Power
-import random
-import math
-from ballclient.simulation.my_action import Action
 
 
 class DoThink(Action):
@@ -90,7 +91,6 @@ class DoThink(Action):
             self.punish_vis_cell(player, move, go_x, go_y)
 
     # 对每一个玩家开始执行
-
     def do_excute(self, player, vis_point):
         next_one_points = self.get_next_one_points(player, vis_point)
         if len(next_one_points) == 0:
@@ -151,7 +151,6 @@ class DoThink(Action):
             for index, player in enumerate(players):
                 if index in vis:
                     continue
-                mLogger.info("index: {}".format(index))
                 dis = mLegStart.get_short_length(
                     player.x, player.y, area_x, area_y)
 
@@ -209,22 +208,18 @@ class DoThink(Action):
         players = sorted(players, key=lambda it: it[0])
 
         follow_players = [it[1] for it in players[:3]]
-        power_player = players[3][1]
+        power_player = [it[1] for it in players[3:]]
 
         return follow_players, power_player
 
     @msimulog()
     def follow_grab_player(self, follow_players):
-        # mLogger.info("[被抓的鱼: {}; ({}, {})] [抓鱼的鱼: {}; ({}, {}) | {}; ({}, {}) | {}; ({}, {})] [吃金币的鱼: {}; ({}, {})]".format(
-        #     grab_ply.id, grab_ply.x, grab_ply.y,
-        #     follow_plys[0].id, follow_plys[0].x, follow_plys[0].y,
-        #     follow_plys[1].id, follow_plys[1].x, follow_plys[1].y,
-        #     follow_plys[2].id, follow_plys[2].x, follow_plys[2].y,
-        #     pow_ply.id, pow_ply.x, pow_ply.y
-        # ))
-
         vis_point = set()
         for player in follow_players:
+            if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
+                mLogger.info("假装追到了，或者视野预判失误")
+                return True
+
             next_one_points = self.get_next_one_points(
                 player, vis_point)
 
@@ -240,6 +235,17 @@ class DoThink(Action):
 
             player.move = ret
             vis_point.add(cell_id)
+        return False
+        # for player in follow_players:
+        #     if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
+        #         mLogger.info("假装追到了，或者视野预判失误")
+        #         return True
+
+        #     move = mLegStart.get_short_move(
+        #         player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
+        #     player.move = move
+
+        # return False
 
     @msimulog()
     def predict_grab_player(self):
@@ -248,11 +254,13 @@ class DoThink(Action):
 
         for move, go_x, go_y in next_one_points:
             have_view = False
+            mLogger.info(
+                "[move: {}; pre_point: ({}， {})]".format(move, go_x, go_y))
             for k, player in mPlayers.iteritems():
                 if go_x < player.x - vision or go_x > player.x + vision:
                     continue
 
-                if go_y < player.y - vision or go_y > player.x + vision:
+                if go_y < player.y - vision or go_y > player.y + vision:
                     continue
 
                 have_view = True
@@ -261,36 +269,62 @@ class DoThink(Action):
                 self.grab_player.predict_x = go_x
                 self.grab_player.predict_y = go_y
 
+    def do_excute(self):
+        # 自己的鱼不够四个，老实吃金币
+        if self.mRoundObj.my_alive_player_num < 4:
+            mLogger.info("alive_player < 4")
+            players = [p for k, p in mPlayers.iteritems() if p.sleep == False]
+            self.eat_power(players)
+            return
+
+        # 还没有追鱼的目标
+        if self.grab_player == None:
+            self.grab_player = self.select_grab_player()
+
+        # 找不到一条鱼可以追，视野全部丢失
+        if self.grab_player == None:
+            mLogger.info("鱼全部丢失视野")
+            players = [p for k, p in mPlayers.iteritems() if p.sleep == False]
+            self.eat_power(players)
+            return
+
+        self.grab_player.predict_x = self.grab_player.x
+        self.grab_player.predict_y = self.grab_player.y
+
+        # 要追的鱼看不到了，预判位置
+        if self.grab_player.visiable == False:
+            self.predict_grab_player()
+            mLogger.info("------ [grab_player: {}; point: ({}, {})".format(
+                self.grab_player.id, self.grab_player.x, self.grab_player.y))
+            mLogger.info("------ [grab_player: {}; predict_point: ({}, {})".format(
+                self.grab_player.id, self.grab_player.predict_x, self.grab_player.predict_y))
+
+        follow_players, power_player = self.get_follow_power_player()
+
+        # mLogger.info("[被抓的鱼: {}; ({}, {})] [抓鱼的鱼: {}; ({}, {}) | {}; ({}, {}) | {}; ({}, {})] [吃金币的鱼: {}; ({}, {})]".format(
+        #     self.grab_player.id, self.grab_player.x, self.grab_player.y,
+        #     follow_players[0].id, follow_players[0].x, follow_players[0].y,
+        #     follow_players[1].id, follow_players[1].x, follow_players[1].y,
+        #     follow_players[2].id, follow_players[2].x, follow_players[2].y,
+        #     power_player.id, power_player.x, power_player.y
+        # ))
+
+        # 假装追到鱼了，或者视野预判失误
+        if True == self.follow_grab_player(follow_players):
+            self.grab_player = None
+            players = [p for k, p in mPlayers.iteritems() if p.sleep == False]
+            self.eat_power(players)
+        else:
+            self.eat_power(power_player)
+
     @msimulog()
     def excute(self, mRoundObj):
         self.mRoundObj = mRoundObj
 
-        if self.mRoundObj.my_alive_player_num < 4:
-            players = [ply for k, ply in mPlayers.iteritems()]
-            self.eat_power(players)
-        else:
-            if self.grab_player == None:
-                self.grab_player = self.select_grab_player()
+        self.do_excute()
+        # players = [p for k, p in mPlayers.iteritems() if p.sleep == False]
+        # self.eat_power(players)
 
-            if self.grab_player == None:
-                players = [ply for k, ply in mPlayers.iteritems()]
-                self.eat_power(players)
-            else:
-                self.grab_player.predict_x = self.grab_player.x
-                self.grab_player.predict_y = self.grab_player.y
-
-                if self.grab_player.visiable == False:
-                    self.predict_grab_player()
-
-                    mLogger.info("------ [grab_player: {}; point: ({}, {})".format(
-                        self.grab_player.id, self.grab_player.x, self.grab_player.y))
-                    mLogger.info("------ [grab_player: {}; predict_point: ({}, {})".format(
-                        self.grab_player.id, self.grab_player.predict_x, self.grab_player.predict_y))
-                else:
-                    follow_players, power_player = self.get_follow_power_player()
-
-                    self.follow_grab_player(follow_players)
-                    self.eat_power([power_player])
         action = list()
         for k, player in mPlayers.iteritems():
             if player.sleep == True:

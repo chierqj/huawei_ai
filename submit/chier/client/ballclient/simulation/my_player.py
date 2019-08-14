@@ -24,6 +24,20 @@ class Player(object):
         # 走过的路
         self.vis_cell = set()
 
+        # 要去哪一个矿区吃金币
+        self.target_power_x = None
+        self.target_power_y = None
+
+        # 每一时刻的move
+        self.move = ""
+
+        # 追击的鱼
+        self.grab_fish = None
+
+        # 预测的位置
+        self.predict_x = None
+        self.predict_y = None
+
     def initialize(self):
         self.sleep = True
 

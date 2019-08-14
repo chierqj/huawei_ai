@@ -1,13 +1,12 @@
 # coding: utf-8
 from ballclient.auth import config
-from ballclient.simulation.my_leg_start import mLegStart
-from ballclient.utils.logger import mLogger
-from ballclient.utils.time_wapper import msimulog
-
 from ballclient.simulation.do_beat import mDoBeat
 from ballclient.simulation.do_think import mDoThink
-from ballclient.simulation.my_player import mPlayers, othPlayers, Player
+from ballclient.simulation.my_leg_start import mLegStart
+from ballclient.simulation.my_player import Player, mPlayers, othPlayers
 from ballclient.simulation.my_power import Power
+from ballclient.utils.logger import mLogger
+from ballclient.utils.time_wapper import msimulog
 
 
 class Round(object):
@@ -22,7 +21,9 @@ class Round(object):
         }
         self.force = None
         self.POWER_WAIT_SET = dict()
+        self.neighbar_power = None
         self.my_alive_player_num = 0
+        # 这一回合要追的鱼
 
     # 暴露给service使用的，获取最终结果
     def get_result(self):
@@ -104,6 +105,10 @@ class Round(object):
     def initialize_msg(self, msg):
         self.msg = msg
         self.my_alive_player_num = 0
+        if self.neighbar_power == None:
+            width = mLegStart.msg['msg_data']['map']['width']
+            height = mLegStart.msg['msg_data']['map']['height']
+            self.neighbar_power = [[0] * width for _ in range(height)]
 
     # 更新players状态
     def initialize_players(self):
@@ -113,6 +118,16 @@ class Round(object):
         for k, value in othPlayers.iteritems():
             value.initialize()
             value.update_last_appear()
+
+    def add_neighbar_power(self, x, y, point):
+        width = mLegStart.msg['msg_data']['map']['width']
+        height = mLegStart.msg['msg_data']['map']['height']
+        vision = mLegStart.msg['msg_data']['map']['vision']
+        x1, y1 = max(0, x - vision), max(0, y - vision)
+        x2, y2 = min(width - 1, x + vision), min(height - 1, y + vision)
+        for i in range(x1, x2 + 1):
+            for j in range(y1, y2 + 1):
+                self.neighbar_power[i][j] += point
 
     def update_player_wait_set(self):
         if False == self.check_players():
@@ -190,6 +205,7 @@ class Round(object):
                     point=power['point'],
                     visiable=True
                 )
+                self.add_neighbar_power(power['x'], power['y'], power['point'])
 
     def print_log(self):
         round_id = self.msg['msg_data']['round_id']
