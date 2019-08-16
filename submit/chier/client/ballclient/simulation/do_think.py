@@ -18,7 +18,6 @@ class DoThink(Action):
         self.grab_player = None
         self.grab_player_last_move = ""
 
-    @msimulog()
     def select_grab_player(self):
         for k, oth_player in othPlayers.iteritems():
             if oth_player.visiable == False:
@@ -28,7 +27,6 @@ class DoThink(Action):
             return oth_player
         return None
 
-    @msimulog()
     def eat_power(self, players):
         '''
         lv1: (10, 9)
@@ -58,8 +56,8 @@ class DoThink(Action):
 
         for player in players:
 
-            mLogger.info("[player: {}; point: ({}, {}); target: ({}, {})]".format(
-                player.id, player.x, player.y, player.target_power_x, player.target_power_y))
+            # mLogger.info("[player: {}; point: ({}, {}); target: ({}, {})]".format(
+            #     player.id, player.x, player.y, player.target_power_x, player.target_power_y))
 
             flag = False
             for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
@@ -91,7 +89,6 @@ class DoThink(Action):
                         player, player.target_power_x, player.target_power_y)
                     player.move = min_move
 
-    @msimulog()
     def get_follow_power_player(self):
         players = []
 
@@ -108,30 +105,43 @@ class DoThink(Action):
 
         return follow_players, power_player
 
-    @msimulog()
-    def get_predict_go_point(self):
+    def get_runaway_point(self):
         direction = ["up", "down", "left", "right"]
 
-        predict_go = []
+        min_dis, runx, runy = None, None, None
         for d in direction:
             go_x, go_y = self.mRoundObj.real_go_point(
                 self.grab_player.predict_x, self.grab_player.predict_y, d)
 
             if go_x == None:
                 continue
-            predict_go.append((d, go_x, go_y))
 
-        return predict_go
+            sum_dis = 0
+            for k, player in mPlayers.iteritems():
+                dis = mLegStart.get_short_length(
+                    player.x, player.y, go_x, go_y)
+                sum_dis += float("%.5f" % (1.0 / math.exp(dis)))
+
+            if min_dis == None or sum_dis < min_dis:
+                min_dis, runx, runy = sum_dis, go_x, go_y
+
+        if runx == None:
+            mLogger.info("[player: {}, point: ({}, {})] 无路可逃".format(
+                self.grab_player.id, self.grab_player.predict_x, self.grab_player.predict_y))
+
+        return runx, runy
 
     def get_min_dis(self, player, tx, ty, vis_point=set()):
         next_one_points = self.get_next_one_points(player, vis_point)
-        min_dis, min_move, min_cell = None, None, None
+        min_dis, min_move, min_cell, min_url_dis = None, None, None, None
+        # next_one_points.append(("", player.x, player.y))
 
         for move, go_x, go_y in next_one_points:
             dis = mLegStart.get_short_length(go_x, go_y, tx, ty)
+            url_dis = (go_x - tx) ** 2 + (go_y - ty) ** 2
 
-            if min_dis == None or dis < min_dis:
-                min_dis, min_move = dis, move
+            if min_dis == None or dis < min_dis or (dis == min_dis and url_dis < min_url_dis):
+                min_dis, min_move, min_url_dis = dis, move, url_dis
                 cell_id = mLegStart.get_cell_id(go_x, go_y)
                 min_cell = cell_id
 
@@ -142,63 +152,47 @@ class DoThink(Action):
 
         return min_dis, min_move, min_cell
 
-    @msimulog()
     def follow_grab_player(self, follow_players):
         vis_point = set()
-
-        # predict_go = self.get_predict_go_point()
-
-        predict_go = [("", self.grab_player.predict_x,
-                       self.grab_player.predict_y)]
+        runx, runy = self.get_runaway_point()
 
         min_dis, min_index, ret_move, ret_cell = None, None, None, None
+
         for index, player in enumerate(follow_players):
             if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
                 mLogger.info("假装追到了，或者视野预判失误")
                 return True
 
-            dis, min_move, cell_id = self.get_min_dis(
-                player, self.grab_player.predict_x, self.grab_player.predict_y, vis_point)
+            dis, move, cell_id = self.get_min_dis(
+                player, self.grab_player.predict_x, self.grab_player.predict_y)
+            # dis, move, cell_id = self.get_min_dis(player, runx, runy)
+
 
             if min_dis == None or dis < min_dis:
-                min_dis, min_index, ret_move, ret_cell = dis, index, min_move, cell_id
+                min_dis, ret_move, ret_cell, min_index = dis, move, cell_id, index
 
-        vis_point.add(cell_id)
         follow_players[min_index].move = ret_move
-        used_player, used_predict_go = set(), set()
-        used_player.add(min_index)
+
+
+        mLogger.info("[player: {}; point: ({}, {}); run: ({}, {})]".format(
+            self.grab_player.id, self.grab_player.predict_x, self.grab_player.predict_y, runx, runy))
 
         for index, player in enumerate(follow_players):
-            if index in used_player:
+            if index == min_index:
                 continue
 
-            grab_x, grab_y = self.grab_player.predict_x, self.grab_player.predict_y
-            min_dis, ret_move, ret_cell, set_index = None, None, None, None
+            dis, move, cell_id = self.get_min_dis(player, runx, runy)
+            # dis, move, cell_id = self.get_min_dis(
+            #     player, self.grab_player.predict_x, self.grab_player.predict_y)
 
-            for move, go_x, go_y in predict_go:
-                if move in used_predict_go:
-                    continue
+            player.move = move
 
-                dis, min_move, cell_id = self.get_min_dis(
-                    player, go_x, go_y, vis_point)
-
-                if min_dis == None or dis < min_dis:
-                    min_dis, ret_move, ret_cell, set_index = dis, min_move, cell_id, move
-
-            # used_predict_go.add(set_index)
-            player.move = ret_move
-            vis_point.add(ret_cell)
-        return False
-
-    @msimulog()
     def predict_grab_player(self):
         vision = mLegStart.msg['msg_data']['map']['vision']
         next_one_points = self.get_next_one_points(self.grab_player, set())
 
         for move, go_x, go_y in next_one_points:
             have_view = False
-            mLogger.info(
-                "[move: {}; pre_point: ({}， {})]".format(move, go_x, go_y))
             for k, player in mPlayers.iteritems():
                 if go_x < player.x - vision or go_x > player.x + vision:
                     continue
