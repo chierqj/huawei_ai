@@ -14,8 +14,8 @@ class GameOver(object):
         self.initialize_msg(msg)
         for key in mLegEnd.tolPoint:
             point = mLegEnd.tolPoint[key]
+            # print("\nTeam: {};  Score: {}".format(key, point))
+
             print("\nTeam: {}, Firt: {}, Second: {}, Tol: {}".format(
                 key, point[0], point[1], point[0] + point[1]))
-
-
 mGameOver = GameOver()

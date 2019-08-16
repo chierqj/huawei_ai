@@ -7,6 +7,7 @@ from ballclient.simulation.my_player import Player, mPlayers, othPlayers
 from ballclient.simulation.my_power import Power
 from ballclient.utils.logger import mLogger
 from ballclient.utils.time_wapper import msimulog
+from ballclient.simulation.my_leg_end import mLegEnd
 
 
 class Round(object):
@@ -19,7 +20,7 @@ class Round(object):
                 "actions": []
             }
         }
-        self.force = None
+        self.mode = None
         self.POWER_WAIT_SET = dict()
         self.neighbar_power = None
         self.my_alive_player_num = 0
@@ -105,10 +106,18 @@ class Round(object):
     def initialize_msg(self, msg):
         self.msg = msg
         self.my_alive_player_num = 0
+
         if self.neighbar_power == None:
             width = mLegStart.msg['msg_data']['map']['width']
             height = mLegStart.msg['msg_data']['map']['height']
             self.neighbar_power = [[0] * width for _ in range(height)]
+
+        if self.mode == None:
+            self.mode = self.msg['msg_data']['mode']
+        else:
+            if self.mode != self.msg['msg_data']['mode']:
+                mLegEnd.info_score()
+            self.mode = self.msg['msg_data']['mode']            
 
     # 更新players状态
     def initialize_players(self):

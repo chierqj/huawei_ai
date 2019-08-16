@@ -16,124 +16,17 @@ class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
         self.grab_player = None
-
-    def reward_power(self, player, move, px, py):
-        max_weight, sum_weight = 0, 0
-        for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
-            # 我到金币的
-            dis = mLegStart.get_short_length(px, py, power.x, power.y)
-            weight = float("%.5f" % (1.0 / math.exp(dis)))
-
-            if power.visiable == False:
-                dis = config.POWER_ALPHA * dis + config.POWER_BELAT * power.last_appear_dis
-                weight = 0.0 if dis == 0 else float(
-                    "%.5f" % (1.0 / math.exp(dis)))
-
-            max_weight = max(max_weight, weight)
-            sum_weight += weight
-
-            if config.record_weight == True:
-                mLogger.info("{} [my_fish: {}; point: ({}, {});] [power_value: {}; point: ({}, {})] [dis: {}] [weight: {:.5f}]".format(
-                    move, player.id, player.x, player.y, power.point, power.x, power.y, dis, weight))
-
-        max_weight *= config.THINK_POWER_WEIGHT
-        sum_weight *= config.THINK_POWER_WEIGHT
-
-        nweight = self.weight_moves.get(move, 0)
-        self.weight_moves[move] = float("%.5f" % (nweight + sum_weight))
-        # self.weight_moves[move] = float("%.5f" % (nweight + max_weight))
-
-    def reward_weight(self, player, next_one_points):
-        for move, go_x, go_y in next_one_points:
-            self.reward_power(player, move, go_x, go_y)
-
-    def punish_vis_cell(self, player, move, px, py):
-        cell_id = mLegStart.get_cell_id(px, py)
-        if cell_id in player.vis_cell:
-            nweight = self.weight_moves.get(move, 0)
-
-            mLogger.info("{} [my_fish: {}; point: ({}, {});] [vis_cell_point: ({}, {})] [weight: {:.5f}]".format(
-                move, player.id, player.x, player.y, px, py, config.CELL_WEIGHT))
-
-            if config.record_weight == True:
-                self.weight_moves[move] = float(
-                    "%.5f" % (nweight - config.CELL_WEIGHT))
-
-    def punish_player(self, player, move, px, py):
-        max_weight, sum_weight = 0, 0
-        for k, oth_player in othPlayers.iteritems():
-            # 敌人到我的，敌人要吃我
-            dis = mLegStart.get_short_length(
-                oth_player.x, oth_player.y, px, py)
-            weight = float("%.5f" % (1.0 / math.exp(dis)))
-
-            if oth_player.visiable == False:
-                dis = config.PLAYER_ALPHA * dis + config.PLAYER_BELTA * oth_player.last_appear_dis
-                weight = 0.0 if dis == 0 else float(
-                    "%.5f" % (1.0 / math.exp(dis)))
-
-            max_weight = max(max_weight, weight)
-            sum_weight += weight
-
-            if config.record_weight == True:
-                mLogger.info("{} [my_fish: {}; point: ({}, {});] [othfish: {}; point: ({}, {})] [dis: {}] [weight: {:.5f}]".format(
-                    move, player.id, player.x, player.y, oth_player.id, oth_player.x, oth_player.y, dis, weight))
-
-        max_weight *= config.THINK_PLAYER_WEIGHT
-        sum_weight *= config.THINK_PLAYER_WEIGHT
-        nweight = self.weight_moves.get(move, 0)
-        self.weight_moves[move] = float("%.5f" % (nweight + sum_weight))
-        # self.weight_moves[move] = float("%.5f" % (nweight + max_weight))
-
-    def punish_weight(self, player, next_one_points):
-        for move, go_x, go_y in next_one_points:
-            self.punish_player(player, move, go_x, go_y)
-            self.punish_vis_cell(player, move, go_x, go_y)
-
-    # 对每一个玩家开始执行
-    def do_excute(self, player, vis_point):
-        next_one_points = self.get_next_one_points(player, vis_point)
-        if len(next_one_points) == 0:
-            return ""
-
-        self.initial_weight_moves()
-        self.reward_weight(player, next_one_points)
-        self.punish_weight(player, next_one_points)
-
-        ret_move = self.select_best_move()
-        ret_x, ret_y = self.mRoundObj.real_go_point(
-            player.x, player.y, ret_move)
-        ret_cell_id = mLegStart.get_cell_id(ret_x, ret_y)
-        vis_point.add(ret_cell_id)
-        self.record_detial(player, ret_move)
-        return ret_move
+        self.grab_player_last_move = ""
 
     @msimulog()
     def select_grab_player(self):
         for k, oth_player in othPlayers.iteritems():
             if oth_player.visiable == False:
                 continue
+            if oth_player.score < 5:
+                continue
             return oth_player
         return None
-        # min_dis, grab_ply, follow_plys, pow_ply = None, None, None, None
-        # for k, oth_ply in othPlayers.iteritems():
-        #     return oth_ply
-        #     if oth_ply.visiable == False:
-        #         continue
-        #     distance = []
-        #     for k, m_ply in mPlayers.iteritems():
-        #         dis = mLegStart.get_short_length(
-        #             m_ply.x, m_ply.y, oth_ply.x, oth_ply.y)
-        #         distance.append((dis, m_ply))
-        #     distance = sorted(distance, key=lambda it: it[0])
-        #     tmp_dis = [it[0] for it in distance]
-        #     print(tmp_dis)
-        #     sum_dis = distance[0][0] + distance[1][0] + distance[2][0]
-        #     if min_dis == None or sum_dis < min_dis:
-        #         min_dis, grab_ply = sum_dis, oth_ply
-        #         follow_plys = [distance[0][1], distance[1][1], distance[2][1]]
-        #         pow_ply = distance[3][1]
-        # return grab_ply, pow_ply, follow_plys
 
     @msimulog()
     def eat_power(self, players):
@@ -164,11 +57,11 @@ class DoThink(Action):
             vis.add(min_player_index)
 
         for player in players:
-            mLogger.info("[ply: {}; point: ({}, {}); target: ({}, {})".format(
+
+            mLogger.info("[player: {}; point: ({}, {}); target: ({}, {})]".format(
                 player.id, player.x, player.y, player.target_power_x, player.target_power_y))
 
             flag = False
-
             for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
                 if power.visiable == False:
                     continue
@@ -185,16 +78,18 @@ class DoThink(Action):
                     continue
 
                 flag = True
-                player.move = mLegStart.get_short_move(
-                    player.x, player.y, power.x, power.y)
+
+                dis, min_move, _ = self.get_min_dis(player, power.x, power.y)
+                player.move = min_move
                 break
 
             if False == flag:
                 if player.x == player.target_power_x and player.y == player.target_power_y:
                     player.move = ""
                 else:
-                    player.move = mLegStart.get_short_move(
-                        player.x, player.y, player.target_power_x, player.target_power_y)
+                    dis, min_move, _ = self.get_min_dis(
+                        player, player.target_power_x, player.target_power_y)
+                    player.move = min_move
 
     @msimulog()
     def get_follow_power_player(self):
@@ -207,45 +102,96 @@ class DoThink(Action):
 
         players = sorted(players, key=lambda it: it[0])
 
-        follow_players = [it[1] for it in players[:3]]
-        power_player = [it[1] for it in players[3:]]
+        follow_num = 3
+        follow_players = [it[1] for it in players[:follow_num]]
+        power_player = [it[1] for it in players[follow_num:]]
 
         return follow_players, power_player
 
     @msimulog()
+    def get_predict_go_point(self):
+        direction = ["up", "down", "left", "right"]
+
+        predict_go = []
+        for d in direction:
+            go_x, go_y = self.mRoundObj.real_go_point(
+                self.grab_player.predict_x, self.grab_player.predict_y, d)
+
+            if go_x == None:
+                continue
+            predict_go.append((d, go_x, go_y))
+
+        return predict_go
+
+    def get_min_dis(self, player, tx, ty, vis_point=set()):
+        next_one_points = self.get_next_one_points(player, vis_point)
+        min_dis, min_move, min_cell = None, None, None
+        next_one_points.append(("", player.x, player.y))
+
+        for move, go_x, go_y in next_one_points:
+            dis = mLegStart.get_short_length(go_x, go_y, tx, ty)
+
+            if min_dis == None or dis < min_dis:
+                min_dis, min_move = dis, move
+                cell_id = mLegStart.get_cell_id(go_x, go_y)
+                min_cell = cell_id
+
+        if min_dis == None:
+            mLogger.warning("[player: {}; point: ({}, {})] 无路可走".format(
+                player.id, player.x, player.y))
+            return -1, "", -1
+
+        return min_dis, min_move, min_cell
+
+    @msimulog()
     def follow_grab_player(self, follow_players):
         vis_point = set()
-        for player in follow_players:
+
+        # predict_go = self.get_predict_go_point()
+
+        predict_go = [("", self.grab_player.predict_x,
+                       self.grab_player.predict_y)]
+
+        min_dis, min_index, ret_move, ret_cell = None, None, None, None
+        for index, player in enumerate(follow_players):
             if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
                 mLogger.info("假装追到了，或者视野预判失误")
                 return True
 
-            next_one_points = self.get_next_one_points(
-                player, vis_point)
+            dis, min_move, cell_id = self.get_min_dis(
+                player, self.grab_player.predict_x, self.grab_player.predict_y, vis_point)
 
-            min_dis, ret, cell_id = None, "", ""
+            if min_dis == None or dis < min_dis:
+                min_dis, min_index, ret_move, ret_cell = dis, index, min_move, cell_id
 
-            for move, go_x, go_y in next_one_points:
-                dis = mLegStart.get_short_length(
-                    go_x, go_y, self.grab_player.predict_x, self.grab_player.predict_y)
+        if min_dis <= 1:
+            vis_point.add(ret_cell)
+        follow_players[min_index].move = ret_move
+        used_player, used_predict_go = set(), set()
+        used_player.add(min_index)
+
+        for index, player in enumerate(follow_players):
+            if index in used_player:
+                continue
+
+            grab_x, grab_y = self.grab_player.predict_x, self.grab_player.predict_y
+            min_dis, ret_move, ret_cell, set_index = None, None, None, None
+
+            for move, go_x, go_y in predict_go:
+                if move in used_predict_go:
+                    continue
+
+                dis, min_move, cell_id = self.get_min_dis(
+                    player, go_x, go_y, vis_point)
 
                 if min_dis == None or dis < min_dis:
-                    min_dis, ret = dis, move
-                    cell_id = mLegStart.get_cell_id(go_x, go_y)
+                    min_dis, ret_move, ret_cell, set_index = dis, min_move, cell_id, move
 
-            player.move = ret
-            vis_point.add(cell_id)
+            # used_predict_go.add(set_index)
+            player.move = ret_move
+            if min_dis <= 1:
+                vis_point.add(ret_cell)
         return False
-        # for player in follow_players:
-        #     if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
-        #         mLogger.info("假装追到了，或者视野预判失误")
-        #         return True
-
-        #     move = mLegStart.get_short_move(
-        #         player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
-        #     player.move = move
-
-        # return False
 
     @msimulog()
     def predict_grab_player(self):
@@ -269,6 +215,28 @@ class DoThink(Action):
                 self.grab_player.predict_x = go_x
                 self.grab_player.predict_y = go_y
 
+    def cal_last_move(self):
+        if self.grab_player.predict_x == None:
+            self.grab_player_last_move = ""
+            return
+
+        # predict_x 还没有更新，是上一轮的位置
+        if self.grab_player.predict_x < self.grab_player.x:
+            self.grab_player_last_move = "right"
+            return
+        if self.grab_player.predict_x > self.grab_player.x:
+            self.grab_player_last_move = "left"
+            return
+
+        if self.grab_player.predict_y < self.grab_player.y:
+            self.grab_player_last_move = "down"
+            return
+        if self.grab_player.predict_y > self.grab_player.y:
+            self.grab_player_last_move = "up"
+            return
+
+        self.grab_player_last_move = ""
+
     def do_excute(self):
         # 自己的鱼不够四个，老实吃金币
         if self.mRoundObj.my_alive_player_num < 4:
@@ -288,6 +256,7 @@ class DoThink(Action):
             self.eat_power(players)
             return
 
+        self.cal_last_move()
         self.grab_player.predict_x = self.grab_player.x
         self.grab_player.predict_y = self.grab_player.y
 
@@ -301,14 +270,6 @@ class DoThink(Action):
 
         follow_players, power_player = self.get_follow_power_player()
 
-        # mLogger.info("[被抓的鱼: {}; ({}, {})] [抓鱼的鱼: {}; ({}, {}) | {}; ({}, {}) | {}; ({}, {})] [吃金币的鱼: {}; ({}, {})]".format(
-        #     self.grab_player.id, self.grab_player.x, self.grab_player.y,
-        #     follow_players[0].id, follow_players[0].x, follow_players[0].y,
-        #     follow_players[1].id, follow_players[1].x, follow_players[1].y,
-        #     follow_players[2].id, follow_players[2].x, follow_players[2].y,
-        #     power_player.id, power_player.x, power_player.y
-        # ))
-
         # 假装追到鱼了，或者视野预判失误
         if True == self.follow_grab_player(follow_players):
             self.grab_player = None
@@ -316,25 +277,6 @@ class DoThink(Action):
             self.eat_power(players)
         else:
             self.eat_power(power_player)
-
-    @msimulog()
-    def excute(self, mRoundObj):
-        self.mRoundObj = mRoundObj
-
-        self.do_excute()
-        # players = [p for k, p in mPlayers.iteritems() if p.sleep == False]
-        # self.eat_power(players)
-
-        action = list()
-        for k, player in mPlayers.iteritems():
-            if player.sleep == True:
-                continue
-            action.append({
-                "team": player.team,
-                "player_id": player.id,
-                "move": [player.move]
-            })
-        return action
 
 
 mDoThink = DoThink()

@@ -260,6 +260,8 @@ class LegStart(object):
         if self.out_graph_border(x2, y2):
             mLogger.warning("end_point: ({}, {})越界了".format(x2, y2))
             return None
+        if x1 == x2 and y1 == y2:
+            return 0
 
         pid1 = self.get_cell_id(x1, y1)
         pid2 = self.get_cell_id(x2, y2)
@@ -283,6 +285,8 @@ class LegStart(object):
             return None
         if self.out_graph_border(x2, y2):
             return None
+        if x1 == x2 and y1 == y2:
+            return ""
 
         pid1 = self.get_cell_id(x1, y1)
         pid2 = self.get_cell_id(x2, y2)

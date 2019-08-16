@@ -13,7 +13,7 @@ log_file_path = 'C:/Users/chier/Desktop/huawei_ai/log/battle.log'
 need_short_path = False
 
 # 是否需要计算最短路第一步的移动方向
-need_short_move = True
+need_short_move = False
 
 # log是否输出详细每条鱼每一步的情况
 record_detial = True

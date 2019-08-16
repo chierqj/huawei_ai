@@ -39,7 +39,6 @@ class DoBeat(Action):
 
         nweight = self.weight_moves.get(move, 0)
         self.weight_moves[move] = float("%.5f" % (nweight + sum_weight))
-        # self.weight_moves[move] = float("%.5f" % (nweight + max_weight))
 
     def reward_weight(self, player, next_one_points):
         for move, go_x, go_y in next_one_points:
@@ -82,7 +81,6 @@ class DoBeat(Action):
 
         nweight = self.weight_moves.get(move, 0)
         self.weight_moves[move] = float("%.5f" % (nweight + sum_weight))
-        # self.weight_moves[move] = float("%.5f" % (nweight + max_weight))
 
     def punish_weight(self, player, next_one_points):
         for move, go_x, go_y in next_one_points:

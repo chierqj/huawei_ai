@@ -26,7 +26,7 @@ class Action(object):
             player.id, player.x, player.y, move))
 
     # 获取下一步移动的位置，仅判断是不是合法
-    def get_next_one_points(self, player, vis_point):
+    def get_next_one_points(self, player, vis_point = set()):
         moves = ['up', 'down', 'left', 'right']
         result = []
         for move in moves:
@@ -56,6 +56,7 @@ class Action(object):
     2. 虫洞
     3. 其他玩家
     '''
+
     def reward_weight(self, player, next_one_points):
         pass
 
@@ -79,31 +80,39 @@ class Action(object):
         return ret_move
 
     # 对每一个玩家开始执行
-    def do_excute(self, player, vis_point):
-        next_one_points = self.get_next_one_points(player, vis_point)
-        if len(next_one_points) == 0:
-            return ""
+    def do_excute(self):
+        vis_point = set()
+        for k, player in mPlayers.iteritems():
+            next_one_points = self.get_next_one_points(player, vis_point)
+            if len(next_one_points) == 0:
+                player.move = ""
+                continue
 
-        self.initial_weight_moves()
-        self.reward_weight(player, next_one_points)
-        self.punish_weight(player, next_one_points)
+            self.initial_weight_moves()
+            self.reward_weight(player, next_one_points)
+            self.punish_weight(player, next_one_points)
 
-        ret_move = self.select_best_move()
-        ret_x, ret_y = self.mRoundObj.real_go_point(
-            player.x, player.y, ret_move)
-        ret_cell_id = mLegStart.get_cell_id(ret_x, ret_y)
-        vis_point.add(ret_cell_id)
-        self.record_detial(player, ret_move)
-        return ret_move
+            ret_move = self.select_best_move()
+            player.move = ret_move
+
+            ret_x, ret_y = self.mRoundObj.real_go_point(
+                player.x, player.y, ret_move)
+            ret_cell_id = mLegStart.get_cell_id(ret_x, ret_y)
+            vis_point.add(ret_cell_id)
+
+            self.record_detial(player, ret_move)
+
 
     def excute(self, mRoundObj):
         self.mRoundObj = mRoundObj
+        self.do_excute()
         action = list()
-        vis_point = set()
         for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
             action.append({
                 "team": player.team,
                 "player_id": player.id,
-                "move": [self.do_excute(player, vis_point)]
+                "move": [player.move]
             })
         return action
