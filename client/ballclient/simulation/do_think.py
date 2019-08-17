@@ -22,12 +22,9 @@ class DoThink(Action):
         self.grab_player = None
 
     # 选择被抓的鱼
-
     def select_grab_player(self):
         for k, oth_player in othPlayers.iteritems():
             if oth_player.visiable == False:
-                continue
-            if oth_player.score < 5:
                 continue
             return oth_player
         return None
@@ -61,8 +58,8 @@ class DoThink(Action):
         lv3: (16, 17)
         lv4: (16, 2)
         '''
-        # power_area = [(10, 9), (4, 3), (14, 3), (14, 16)]
-        power_area = [(10, 5), (10, 15), (4, 2), (15, 2)]
+        # power_area = [(10, 9), (4, 3), (14, 3), (14, 16)]     # 图三
+        power_area = [(10, 5), (10, 15), (4, 2), (15, 2)]       # 图四
         vis = set()
         for area_x, area_y in power_area:
             min_dis, min_player_index = None, None
@@ -171,10 +168,10 @@ class DoThink(Action):
 
                 weight += float("%.3f" % (1.0 / math.exp(dis)))
 
-                # if weight == None or dis < weight:
+                # if weight == None or dis >= weight:
                 #     weight = float("%.3f" % (1.0 / math.exp(dis)))
 
-            if max_dis == None or weight <= max_dis:
+            if max_dis == None or weight < max_dis:
                 max_dis, run_move, runx, runy = weight, d, go_x, go_y
 
             log_info += "> {} < [go: ({}, {}); weight: {:.3f}]\n".format(
@@ -192,8 +189,58 @@ class DoThink(Action):
         )
         mLogger.info(log_info)
 
+    def force_enum(self, follow_players):
+        next_one_points_ary = []
+        for player in follow_players:
+            if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
+                mLogger.info("假装追到了，或者视野预判失误")
+                return True
+            tmp = self.get_next_one_points(player)
+            next_one_points_ary.append(tmp)
+
+        grab_player_next = self.get_predict_next_one_points(self.grab_player)
+
+        ans_weight, ans_move = None, None
+        for m1, x1, y1 in next_one_points_ary[0]:
+            for m2, x2, y2 in next_one_points_ary[1]:
+                for m3, x3, y3 in next_one_points_ary[2]:
+                    min_weight = None
+
+                    # mLogger.info("[fish: {}; point: ({}, {}); move: {}; go: ({}, {})]".format(
+                    #     follow_players[0].id, follow_players[0].x, follow_players[0].y,
+                    #     m1, x1, y1
+                    # ))
+                    # mLogger.info("[fish: {}; point: ({}, {}); move: {}; go: ({}, {})]".format(
+                    #     follow_players[1].id, follow_players[1].x, follow_players[1].y,
+                    #     m2, x2, y2
+                    # ))
+                    # mLogger.info("[fish: {}; point: ({}, {}); move: {}; go: ({}, {})]".format(
+                    #     follow_players[2].id, follow_players[2].x, follow_players[2].y,
+                    #     m3, x3, y3
+                    # ))
+
+                    for m, x, y in grab_player_next:
+                        dis1 = mLegStart.get_short_length(x1, y1, x, y)
+                        dis2 = mLegStart.get_short_length(x2, y2, x, y)
+                        dis3 = mLegStart.get_short_length(x3, y3, x, y)
+                        weight = float("%.20f" % (1.0 / math.exp(dis1)))
+                        weight += float("%.20f" % (1.0 / math.exp(dis2)))
+                        weight += float("%.20f" % (1.0 / math.exp(dis3)))
+
+                        if min_weight == None or weight < min_weight:
+                            min_weight = weight
+
+                    if ans_weight == None or min_weight < ans_weight:
+                        ans_weight = min_weight
+                        ans_move = [m1, m2, m3]
+
+        for index in range(3):
+            follow_players[index].move = ans_move[index]
+        return False
+
     # 抓鱼部分
     def follow_grab_player(self, follow_players):
+        # return self.force_enum(follow_players)
         vis_point = set()
         self.get_runaway_point(follow_players)
 
@@ -206,7 +253,8 @@ class DoThink(Action):
 
             dis, move, cell_id = self.get_min_dis(
                 player, self.grab_player.predict_x, self.grab_player.predict_y)
-            # dis, move, cell_id = self.get_min_dis(player, self.grab_player.runx, self.grab_player.runy)
+            # dis, move, cell_id = self.get_min_dis(
+            #     player, self.grab_player.runx, self.grab_player.runy)
 
             if min_dis == None or dis < min_dis:
                 min_dis, ret_move, ret_cell, min_index = dis, move, cell_id, index

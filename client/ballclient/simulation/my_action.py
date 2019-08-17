@@ -26,7 +26,7 @@ class Action(object):
             player.id, player.x, player.y, move))
 
     # 获取下一步移动的位置，仅判断是不是合法
-    def get_next_one_points(self, player, vis_point = set()):
+    def get_next_one_points(self, player, vis_point=set()):
         moves = ['up', 'down', 'left', 'right']
         result = []
         for move in moves:
@@ -45,8 +45,28 @@ class Action(object):
             result.append((move, go_x, go_y))
         return result
 
-    # 初始化评分
+    # 获取以predict为出发点下一步移动的位置，仅判断是不是合法
+    def get_predict_next_one_points(self, player, vis_point=set()):
+        moves = ['up', 'down', 'left', 'right']
+        result = []
+        for move in moves:
+            # 获取move之后真正到达的位置
+            go_x, go_y = self.mRoundObj.real_go_point(
+                player.predict_x, player.predict_y, move)
+            if False == self.mRoundObj.match_border(go_x, go_y):
+                continue
+            if True == self.mRoundObj.match_meteor(go_x, go_y):
+                continue
+            if go_x == player.x and go_y == player.y:
+                continue
+            go_cell_id = mLegStart.get_cell_id(go_x, go_y)
+            # vis_point 控制多条鱼尽量不重叠
+            if go_cell_id in vis_point:
+                continue
+            result.append((move, go_x, go_y))
+        return result
 
+    # 初始化评分
     def initial_weight_moves(self):
         self.weight_moves.clear()
 
@@ -101,7 +121,6 @@ class Action(object):
             vis_point.add(ret_cell_id)
 
             self.record_detial(player, ret_move)
-
 
     def excute(self, mRoundObj):
         self.mRoundObj = mRoundObj
