@@ -38,6 +38,10 @@ class Player(object):
         self.predict_x = None
         self.predict_y = None
 
+        # 逃跑的位置
+        self.runx = None
+        self.runy = None
+
     def initialize(self):
         self.sleep = True
 

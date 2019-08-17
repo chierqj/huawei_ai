@@ -20,11 +20,9 @@ class Round(object):
                 "actions": []
             }
         }
-        self.mode = None
         self.POWER_WAIT_SET = dict()
         self.neighbar_power = None
         self.my_alive_player_num = 0
-        # 这一回合要追的鱼
 
     # 暴露给service使用的，获取最终结果
     def get_result(self):
@@ -111,13 +109,6 @@ class Round(object):
             width = mLegStart.msg['msg_data']['map']['width']
             height = mLegStart.msg['msg_data']['map']['height']
             self.neighbar_power = [[0] * width for _ in range(height)]
-
-        if self.mode == None:
-            self.mode = self.msg['msg_data']['mode']
-        else:
-            if self.mode != self.msg['msg_data']['mode']:
-                mLegEnd.info_score()
-            self.mode = self.msg['msg_data']['mode']            
 
     # 更新players状态
     def initialize_players(self):

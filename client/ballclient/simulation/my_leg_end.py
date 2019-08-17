@@ -7,30 +7,13 @@ class LegEnd(object):
     def __init__(self):
         self.msg = ""
         self.tolPoint = dict()
+        self.catch_run = 0
+        self.not_catch_run = 0
+        self.catch_predict = 0
+        self.tol_predict = 0
 
     def initialize_msg(self, msg):
         self.msg = msg
-
-    def info_score(self):
-        return
-        team, score = -1, 0
-        for k, player in mPlayers.iteritems():
-            team = player.team
-            score += player.score
-
-        team = str(team)
-        point = self.tolPoint.get(team, [])
-        point.append(score)
-        self.tolPoint[team] = point
-
-        team, score = -1, 0
-        for k, player in othPlayers.iteritems():
-            team = player.team
-            score += player.score
-        team = str(team)
-        point = self.tolPoint.get(team, [])
-        point.append(score)
-        self.tolPoint[team] = point
 
     def excute(self, msg):
         self.initialize_msg(msg)
@@ -39,6 +22,17 @@ class LegEnd(object):
             point = self.tolPoint.get(str(team['id']), [])
             point.append(team['point'])
             self.tolPoint[str(team['id'])] = point
+
+        print("-------------------------------------------------")
+        print(">预判逃跑位置< [正确: {}; 错误: {}]".format(
+            self.catch_run, self.not_catch_run))
+        # print(">预判视野丢失< [总计: {}; 正确: {}]".format(
+        #     self.tol_predict, self.catch_predict))
+
+        self.catch_run = 0
+        self.not_catch_run = 0
+        self.tol_predict = 0
+        self.catch_predict = 0
 
 
 mLegEnd = LegEnd()

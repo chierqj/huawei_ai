@@ -14,12 +14,14 @@ from ballclient.simulation.my_leg_end import mLegEnd
 from ballclient.simulation.my_game_over import mGameOver
 from ballclient.utils.logger import mLogger
 from ballclient.utils.time_wapper import msimulog
+from ballclient.simulation.do_think import mDoThink
 
 
 @msimulog()
 def leg_start(msg):
     try:
         mLegStart.excute(msg)
+        mDoThink.init()
     except Exception as e:
         mLogger.error(e)
 

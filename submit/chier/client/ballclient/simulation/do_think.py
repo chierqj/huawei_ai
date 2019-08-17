@@ -10,13 +10,18 @@ from ballclient.simulation.my_player import Player, mPlayers, othPlayers
 from ballclient.simulation.my_power import Power
 from ballclient.utils.logger import mLogger
 from ballclient.utils.time_wapper import msimulog
+from ballclient.simulation.my_leg_end import mLegEnd
 
 
 class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
         self.grab_player = None
-        self.grab_player_last_move = ""
+
+    def init(self):
+        self.grab_player = None
+
+    # 选择被抓的鱼
 
     def select_grab_player(self):
         for k, oth_player in othPlayers.iteritems():
@@ -27,6 +32,28 @@ class DoThink(Action):
             return oth_player
         return None
 
+    # 获取一个鱼四个方向离目标点最近的dis, move, cell
+    def get_min_dis(self, player, tx, ty, vis_point=set()):
+        next_one_points = self.get_next_one_points(player, vis_point)
+        min_dis, min_move, min_cell, min_url_dis = None, None, None, None
+
+        for move, go_x, go_y in next_one_points:
+            dis = mLegStart.get_short_length(go_x, go_y, tx, ty)
+            url_dis = (go_x - tx) ** 2 + (go_y - ty) ** 2
+
+            if min_dis == None or dis < min_dis or (dis == min_dis and url_dis < min_url_dis):
+                min_dis, min_move, min_url_dis = dis, move, url_dis
+                cell_id = mLegStart.get_cell_id(go_x, go_y)
+                min_cell = cell_id
+
+        if min_dis == None:
+            mLogger.warning("[player: {}; point: ({}, {})] 无路可走".format(
+                player.id, player.x, player.y))
+            return -1, "", -1
+
+        return min_dis, min_move, min_cell
+
+    # players去吃能量
     def eat_power(self, players):
         '''
         lv1: (10, 9)
@@ -34,7 +61,8 @@ class DoThink(Action):
         lv3: (16, 17)
         lv4: (16, 2)
         '''
-        power_area = [(10, 9), (4, 3), (14, 3), (14, 16)]
+        # power_area = [(10, 9), (4, 3), (14, 3), (14, 16)]
+        power_area = [(10, 5), (10, 15), (4, 2), (15, 2)]
         vis = set()
         for area_x, area_y in power_area:
             min_dis, min_player_index = None, None
@@ -55,10 +83,6 @@ class DoThink(Action):
             vis.add(min_player_index)
 
         for player in players:
-
-            # mLogger.info("[player: {}; point: ({}, {}); target: ({}, {})]".format(
-            #     player.id, player.x, player.y, player.target_power_x, player.target_power_y))
-
             flag = False
             for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
                 if power.visiable == False:
@@ -89,6 +113,10 @@ class DoThink(Action):
                         player, player.target_power_x, player.target_power_y)
                     player.move = min_move
 
+            mLogger.info(">吃能量< [player: {}; point: ({}, {}); target: ({}, {}); move: {}]".format(
+                player.id, player.x, player.y, player.target_power_x, player.target_power_y, player.move))
+
+    # 获取抓鱼的鱼
     def get_follow_power_player(self):
         players = []
 
@@ -105,10 +133,28 @@ class DoThink(Action):
 
         return follow_players, power_player
 
-    def get_runaway_point(self):
+    # 预判敌方鱼逃跑的位置
+    def get_runaway_point(self, follow_players):
+        info_ary = []
+        for player in follow_players:
+            # 假设我的鱼都朝向敌人走最短路径走了一步到达的位置是cell
+            dis, move, cell = self.get_min_dis(
+                player, self.grab_player.predict_x, self.grab_player.predict_y)
+            info_ary.append((dis, move, cell))
+            # info_ary.append(
+            #     (dis, move, mLegStart.get_cell_id(player.x, player.y)))
+
+            x, y = mLegStart.get_x_y(cell)
+            mLogger.info(">我的鱼假设走一步< [player: {}; point: ({}, {}); move: {}; to: ({}, {})]".format(
+                player.id, player.x, player.y, move, x, y
+            ))
+
+        max_dis, run_move, runx, runy = None, None, None, None
         direction = ["up", "down", "left", "right"]
 
-        min_dis, runx, runy = None, None, None
+        log_info = "\n> 敌人 < [grab_player: {}; point: ({}, {}); predict: ({}, {})]\n".format(
+            self.grab_player.id, self.grab_player.x, self.grab_player.y, self.grab_player.predict_x, self.grab_player.predict_y
+        )
         for d in direction:
             go_x, go_y = self.mRoundObj.real_go_point(
                 self.grab_player.predict_x, self.grab_player.predict_y, d)
@@ -116,45 +162,40 @@ class DoThink(Action):
             if go_x == None:
                 continue
 
-            sum_dis = 0
-            for k, player in mPlayers.iteritems():
-                dis = mLegStart.get_short_length(
-                    player.x, player.y, go_x, go_y)
-                sum_dis += float("%.5f" % (1.0 / math.exp(dis)))
+            # weight = None
+            weight = 0
+            for _, _, cell in info_ary:
+                # 根据cell来预判敌人逃跑的位置
+                x, y = mLegStart.get_x_y(cell)
+                dis = mLegStart.get_short_length(x, y, go_x, go_y)
 
-            if min_dis == None or sum_dis < min_dis:
-                min_dis, runx, runy = sum_dis, go_x, go_y
+                weight += float("%.3f" % (1.0 / math.exp(dis)))
+
+                # if weight == None or dis < weight:
+                #     weight = float("%.3f" % (1.0 / math.exp(dis)))
+
+            if max_dis == None or weight <= max_dis:
+                max_dis, run_move, runx, runy = weight, d, go_x, go_y
+
+            log_info += "> {} < [go: ({}, {}); weight: {:.3f}]\n".format(
+                d, go_x, go_y, weight
+            )
 
         if runx == None:
             mLogger.info("[player: {}, point: ({}, {})] 无路可逃".format(
                 self.grab_player.id, self.grab_player.predict_x, self.grab_player.predict_y))
 
-        return runx, runy
+        self.grab_player.runx, self.grab_player.runy = runx, runy
 
-    def get_min_dis(self, player, tx, ty, vis_point=set()):
-        next_one_points = self.get_next_one_points(player, vis_point)
-        min_dis, min_move, min_cell, min_url_dis = None, None, None, None
-        # next_one_points.append(("", player.x, player.y))
+        log_info += "> 选择 < [move: {}; run: ({}, {})] \n".format(
+            run_move, runx, runy
+        )
+        mLogger.info(log_info)
 
-        for move, go_x, go_y in next_one_points:
-            dis = mLegStart.get_short_length(go_x, go_y, tx, ty)
-            url_dis = (go_x - tx) ** 2 + (go_y - ty) ** 2
-
-            if min_dis == None or dis < min_dis or (dis == min_dis and url_dis < min_url_dis):
-                min_dis, min_move, min_url_dis = dis, move, url_dis
-                cell_id = mLegStart.get_cell_id(go_x, go_y)
-                min_cell = cell_id
-
-        if min_dis == None:
-            mLogger.warning("[player: {}; point: ({}, {})] 无路可走".format(
-                player.id, player.x, player.y))
-            return -1, "", -1
-
-        return min_dis, min_move, min_cell
-
+    # 抓鱼部分
     def follow_grab_player(self, follow_players):
         vis_point = set()
-        runx, runy = self.get_runaway_point()
+        self.get_runaway_point(follow_players)
 
         min_dis, min_index, ret_move, ret_cell = None, None, None, None
 
@@ -165,28 +206,29 @@ class DoThink(Action):
 
             dis, move, cell_id = self.get_min_dis(
                 player, self.grab_player.predict_x, self.grab_player.predict_y)
-            # dis, move, cell_id = self.get_min_dis(player, runx, runy)
-
+            # dis, move, cell_id = self.get_min_dis(player, self.grab_player.runx, self.grab_player.runy)
 
             if min_dis == None or dis < min_dis:
                 min_dis, ret_move, ret_cell, min_index = dis, move, cell_id, index
 
         follow_players[min_index].move = ret_move
 
-
-        mLogger.info("[player: {}; point: ({}, {}); run: ({}, {})]".format(
-            self.grab_player.id, self.grab_player.predict_x, self.grab_player.predict_y, runx, runy))
-
         for index, player in enumerate(follow_players):
             if index == min_index:
                 continue
 
-            dis, move, cell_id = self.get_min_dis(player, runx, runy)
+            dis, move, cell_id = self.get_min_dis(
+                player, self.grab_player.runx, self.grab_player.runy)
             # dis, move, cell_id = self.get_min_dis(
             #     player, self.grab_player.predict_x, self.grab_player.predict_y)
 
             player.move = move
 
+        for player in follow_players:
+            mLogger.info(">抓鱼< [player: {}; point: ({}, {}); move: {}]".format(
+                player.id, player.x, player.y, player.move))
+
+    # 当鱼视野丢失的时候，预判他行走的位置
     def predict_grab_player(self):
         vision = mLegStart.msg['msg_data']['map']['vision']
         next_one_points = self.get_next_one_points(self.grab_player, set())
@@ -206,27 +248,20 @@ class DoThink(Action):
                 self.grab_player.predict_x = go_x
                 self.grab_player.predict_y = go_y
 
-    def cal_last_move(self):
-        if self.grab_player.predict_x == None:
-            self.grab_player_last_move = ""
+        mLogger.info(">预判< [player: {}; point: ({}, {}); predict: ({}, {})]".format(
+            self.grab_player.id, self.grab_player.x, self.grab_player.y, self.grab_player.predict_x, self.grab_player.predict_y
+        ))
+        if self.grab_player.x == self.grab_player.predict_x and self.grab_player.y == self.grab_player.predict_y:
+            return None
+
+    def log_catch_num(self):
+        if self.grab_player == None:
             return
 
-        # predict_x 还没有更新，是上一轮的位置
-        if self.grab_player.predict_x < self.grab_player.x:
-            self.grab_player_last_move = "right"
-            return
-        if self.grab_player.predict_x > self.grab_player.x:
-            self.grab_player_last_move = "left"
-            return
-
-        if self.grab_player.predict_y < self.grab_player.y:
-            self.grab_player_last_move = "down"
-            return
-        if self.grab_player.predict_y > self.grab_player.y:
-            self.grab_player_last_move = "up"
-            return
-
-        self.grab_player_last_move = ""
+        if self.grab_player.x == self.grab_player.runx and self.grab_player.y == self.grab_player.runy:
+            mLegEnd.catch_run += 1
+        else:
+            mLegEnd.not_catch_run += 1
 
     def do_excute(self):
         # 自己的鱼不够四个，老实吃金币
@@ -234,7 +269,10 @@ class DoThink(Action):
             mLogger.info("alive_player < 4")
             players = [p for k, p in mPlayers.iteritems() if p.sleep == False]
             self.eat_power(players)
+            self.grab_player = None
             return
+
+        self.log_catch_num()
 
         # 还没有追鱼的目标
         if self.grab_player == None:
@@ -247,17 +285,11 @@ class DoThink(Action):
             self.eat_power(players)
             return
 
-        self.cal_last_move()
         self.grab_player.predict_x = self.grab_player.x
         self.grab_player.predict_y = self.grab_player.y
-
         # 要追的鱼看不到了，预判位置
         if self.grab_player.visiable == False:
             self.predict_grab_player()
-            mLogger.info("------ [grab_player: {}; point: ({}, {})".format(
-                self.grab_player.id, self.grab_player.x, self.grab_player.y))
-            mLogger.info("------ [grab_player: {}; predict_point: ({}, {})".format(
-                self.grab_player.id, self.grab_player.predict_x, self.grab_player.predict_y))
 
         follow_players, power_player = self.get_follow_power_player()
 
