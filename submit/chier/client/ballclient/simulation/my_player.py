@@ -42,6 +42,7 @@ class Player(object):
         self.runx = None
         self.runy = None
 
+
     def initialize(self):
         self.sleep = True
 
