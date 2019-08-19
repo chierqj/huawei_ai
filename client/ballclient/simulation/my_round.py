@@ -60,6 +60,8 @@ class Round(object):
 
     # 根据move改变坐标
     def go_next(self, x, y, move):
+        if move == "":
+            return x, y
         if move == 'up':
             return x, y - 1
         if move == 'down':

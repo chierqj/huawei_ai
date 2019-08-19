@@ -17,9 +17,12 @@ class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
         self.grab_player = None
+        self.need_log_run = False
 
     def init(self):
         self.grab_player = None
+        self.need_log_run = False
+
 
     # 选择被抓的鱼
     def select_grab_player(self):
@@ -189,58 +192,95 @@ class DoThink(Action):
         )
         mLogger.info(log_info)
 
+    # 暴力枚举位置
     def force_enum(self, follow_players):
+        vis_point = set()
         next_one_points_ary = []
         for player in follow_players:
             if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
                 mLogger.info("假装追到了，或者视野预判失误")
-                return True
+                return -1
+
             tmp = self.get_next_one_points(player)
+            # tmp.append(("", player.x, player.y))
             next_one_points_ary.append(tmp)
 
-        grab_player_next = self.get_predict_next_one_points(self.grab_player)
+            cell = mLegStart.get_cell_id(player.x, player.y)
+            vis_point.add(cell)
+
+        grab_player_next = self.get_predict_next_one_points(
+            self.grab_player, vis_point)
+        grab_player_next.append(
+            ("", self.grab_player.predict_x, self.grab_player.predict_y))
 
         ans_weight, ans_move = None, None
+        flag = False
+
         for m1, x1, y1 in next_one_points_ary[0]:
             for m2, x2, y2 in next_one_points_ary[1]:
+                if x1 == x2 and y1 == y2:
+                    continue
                 for m3, x3, y3 in next_one_points_ary[2]:
-                    min_weight = None
+                    if x1 == x3 and y1 == y3:
+                        continue
+                    if x2 == x3 and y2 == y3:
+                        continue
 
-                    # mLogger.info("[fish: {}; point: ({}, {}); move: {}; go: ({}, {})]".format(
-                    #     follow_players[0].id, follow_players[0].x, follow_players[0].y,
-                    #     m1, x1, y1
-                    # ))
-                    # mLogger.info("[fish: {}; point: ({}, {}); move: {}; go: ({}, {})]".format(
-                    #     follow_players[1].id, follow_players[1].x, follow_players[1].y,
-                    #     m2, x2, y2
-                    # ))
-                    # mLogger.info("[fish: {}; point: ({}, {}); move: {}; go: ({}, {})]".format(
-                    #     follow_players[2].id, follow_players[2].x, follow_players[2].y,
-                    #     m3, x3, y3
-                    # ))
+                    min_weight, mm = None, ""
 
                     for m, x, y in grab_player_next:
+                        if x == x1 and y == y1:
+                            continue
+                        if x == x2 and y == y2:
+                            continue
+                        if x == x3 and y == y3:
+                            continue
+
                         dis1 = mLegStart.get_short_length(x1, y1, x, y)
                         dis2 = mLegStart.get_short_length(x2, y2, x, y)
                         dis3 = mLegStart.get_short_length(x3, y3, x, y)
-                        weight = float("%.20f" % (1.0 / math.exp(dis1)))
-                        weight += float("%.20f" % (1.0 / math.exp(dis2)))
-                        weight += float("%.20f" % (1.0 / math.exp(dis3)))
+
+                        if dis1 > 1 or dis2 > 1 or dis3 > 1:
+                            continue
+                        flag = True
+
+                        weight = float("%.3f" % (1.0 / math.exp(dis1)))
+                        weight += float("%.3f" % (1.0 / math.exp(dis2)))
+                        weight += float("%.3f" % (1.0 / math.exp(dis3)))
 
                         if min_weight == None or weight < min_weight:
-                            min_weight = weight
+                            min_weight, mm = weight, m
 
-                    if ans_weight == None or min_weight < ans_weight:
+                    if ans_weight == None or min_weight == None or min_weight > ans_weight:
                         ans_weight = min_weight
-                        ans_move = [m1, m2, m3]
-
+                        ans_move = [m1, m2, m3, mm]
+        if flag == False:
+            return 0
         for index in range(3):
             follow_players[index].move = ans_move[index]
-        return False
+            mLogger.info("> 枚举 < [player: {}; point: ({}, {}); move: {}]".format(
+                follow_players[index].id, follow_players[index].x, follow_players[index].y, ans_move[index]
+            ))
+
+        self.grab_player.runx, self.grab_player.runy = self.mRoundObj.real_go_point(
+            self.grab_player.predict_x, self.grab_player.predict_y, ans_move[3])
+
+        mLogger.info("> 敌人 < [player: {}; point: ({}, {}); predict: ({}, {}); move: {}]".format(
+            self.grab_player.id, self.grab_player.x, self.grab_player.y, self.grab_player.predict_x,
+            self.grab_player.predict_y, ans_move[3]
+        ))
+
+        self.need_log_run = True
+        return 1
 
     # 抓鱼部分
     def follow_grab_player(self, follow_players):
-        # return self.force_enum(follow_players)
+        flag = self.force_enum(follow_players)
+        if flag == -1:
+            return True
+        if flag == 1:
+            return False
+
         vis_point = set()
         self.get_runaway_point(follow_players)
 
@@ -305,10 +345,16 @@ class DoThink(Action):
     def log_catch_num(self):
         if self.grab_player == None:
             return
+        
+        if self.need_log_run == False:
+            return
+
+        self.need_log_run = False
 
         if self.grab_player.x == self.grab_player.runx and self.grab_player.y == self.grab_player.runy:
             mLegEnd.catch_run += 1
         else:
+            mLogger.info("上一回合预判位置错误")
             mLegEnd.not_catch_run += 1
 
     def do_excute(self):
