@@ -61,10 +61,11 @@ class DoThink(Action):
     # players去吃能量
     def eat_power(self, players):
         '''
-        lv1: (10, 9)
-        lv2: (3, 2)
-        lv3: (16, 17)
-        lv4: (16, 2)
+        1. 选取几个矿区，收益最大。矿区的数目根据players的数目决定。
+        2. 每个player去找最近的矿区挖矿
+        3. 挖矿
+            3.1 矿区内有能量，就去找最近的去挖矿
+            3.2 矿区内没能量，就去固定收益点呆着
         '''
         # power_area = [(10, 9), (4, 3), (14, 3), (14, 16)]     # 图三
         power_area = [(10, 5), (10, 15), (4, 2), (15, 2)]       # 图四
@@ -88,40 +89,35 @@ class DoThink(Action):
             vis.add(min_player_index)
 
         for player in players:
-            flag = False
+            min_dis, min_move = None, None
             for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
                 if power.visiable == False:
                     continue
-
-                if power.x == player.x and power.y == player.y:
-                    player.move = ""
-                    flag = True
-                    break
-
                 vision = mLegStart.msg['msg_data']['map']['vision']
                 if power.x > player.target_power_x + vision or power.x < player.target_power_x - vision:
                     continue
                 if power.y > player.target_power_y + vision or power.y < player.target_power_y - vision:
                     continue
 
-                flag = True
+                dis, move, _ = self.get_min_dis(player, power.x, power.y)
+                if min_dis == None or dis < min_dis:
+                    min_dis, min_move = dis, move
 
-                dis, min_move, _ = self.get_min_dis(player, power.x, power.y)
+            if min_move != None:
                 player.move = min_move
-                break
+                continue
 
-            if False == flag:
-                if player.x == player.target_power_x and player.y == player.target_power_y:
-                    player.move = ""
-                else:
-                    dis, min_move, _ = self.get_min_dis(
-                        player, player.target_power_x, player.target_power_y)
-                    player.move = min_move
+            if player.x == player.target_power_x and player.y == player.target_power_y:
+                player.move = ""
+            else:
+                dis, min_move, _ = self.get_min_dis(
+                    player, player.target_power_x, player.target_power_y)
+                player.move = min_move
 
             mLogger.info(">吃能量< [player: {}; point: ({}, {}); target: ({}, {}); move: {}]".format(
                 player.id, player.x, player.y, player.target_power_x, player.target_power_y, player.move))
 
-    # 获取抓鱼的鱼
+    # 获取三个抓鱼的鱼以及吃能量的鱼
     def get_follow_power_player(self):
         players = []
 
@@ -138,7 +134,7 @@ class DoThink(Action):
 
         return follow_players, power_player
 
-    # 预判敌方鱼逃跑的位置
+    # 距离不是很近的时候，预判敌方鱼逃跑的位置
     def get_runaway_point(self, follow_players):
         info_ary = []
         for player in follow_players:
@@ -202,10 +198,6 @@ class DoThink(Action):
         vis_point = set()
         next_one_points_ary = []
         for player in follow_players:
-            if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
-                mLogger.info("假装追到了，或者视野预判失误")
-                return None, None
-
             tmp = self.get_next_one_points(player)
             tmp.append(("", player.x, player.y))
             next_one_points_ary.append(tmp)
@@ -231,79 +223,130 @@ class DoThink(Action):
                         [(m1, x1, y1), (m2, x2, y2), (m3, x3, y3)])
         return all_enums, grab_player_next
 
+    # 计算两个点，(x1, y1) -> (x2, y2)的评分
+    def get_weight_dis(self, x1, y1, x2, y2):
+        weight = 0
+
+        dis = mLegStart.get_short_length(x1, y1, x2, y2)
+        # weight += float("%.3f" % (1.0 / math.exp(dis)))
+
+        dis += math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2) * 0.2
+        # weight += float("%.3f" % (1.0 / math.exp(dis)))
+
+        cell_id = mLegStart.get_cell_id(x2, y2)
+        dis += mLegStart.graph_weight.get(cell_id, 0) * 0.05
+
+        weight += float("%.3f" % (1.0 / math.exp(dis)))
+
+        weight = float("%.3f" % weight)
+
+        return weight
+
+    # 距离很近的时候，获取敌人可能逃跑的run_move, runx, runy
+    def get_possible_run_move(self, all_enums, grab_player_next):
+        return "", self.grab_player.predict_x, self.grab_player.predict_y
+        '''
+        1. 敌人在逃跑的四个位置上最大惩罚值最小；
+        '''
+
+        min_weight, run_move, runx, runy = None, None, None, None
+        for m, x, y in grab_player_next:
+            sub_weight = None
+            for enum in all_enums:
+                m1, x1, y1 = enum[0]
+                m2, x2, y2 = enum[1]
+                m3, x3, y3 = enum[2]
+
+                weight = self.get_weight_dis(x1, y1, x, y)
+                weight += self.get_weight_dis(x2, y2, x, y)
+                weight += self.get_weight_dis(x3, y3, x, y)
+
+                if sub_weight == None or weight > sub_weight:
+                    sub_weight = weight
+
+            if min_weight == None or sub_weight < min_weight:
+                min_weight, run_move, runx, runy = weight, m, x, y
+
+        if run_move == None:
+            mLogger.warning("没有可以用的枚举值或者敌人逃跑位置为空")
+
+        return run_move, runx, runy
+
+    # 判断是不是需要暴力枚举，只有在视野范围内才暴力
+    def match_need_force_enum(self, follow_players):
+        for player in follow_players:
+            dis = mLegStart.get_short_length(
+                player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
+            # vision = mLegStart.msg['msg_data']['map']['vision']
+            # if player.x < self.grab_player.x - vision or player.x > self.grab_player.x + vision:
+            #     return False
+            # if player.y < self.grab_player.y - vision or player.y > self.grab_player.y + vision:
+            #     return False
+            if dis > 3:
+                return False
+        return True
+
+    # 以敌人的位置为原点，计算发力点
+    def get_force_point(self, enum, x, y):
+        m1, x1, y1 = enum[0]
+        m2, x2, y2 = enum[1]
+        m3, x3, y3 = enum[2]
+
+        ret_x = x1 + x2 + x3 - 3 * x
+        ret_y = y1 + y2 + y3 - 3 * y
+
+        # mLogger.info("> 合力 < [{}; ret: ({}, {})]".format(enum, ret_x, ret_y))
+
+        return ret_x, ret_y
+
     # 暴力枚举位置
     def force_enum(self, follow_players):
+        '''
+        1. 判断是不是满足暴力枚举的条件
+        2. 获取所有的枚举值以及敌人可以逃跑的位置
+        3. 获取敌人可能逃跑的位置
+        4. 对逃跑的位置进行惩罚最大抓捕
+        '''
+        if False == self.match_need_force_enum(follow_players):
+            return False
         all_enums, grab_player_next = self.get_enums(follow_players)
         if all_enums == None:
-            return -1
+            return False
+        run_move, runx, runy = self.get_possible_run_move(
+            all_enums, grab_player_next)
+        if run_move == None:
+            return False
 
-        ans_weight, ans_move = None, None
-        flag = False
+        max_weight, ans_move = None, None
         for enum in all_enums:
             m1, x1, y1 = enum[0]
             m2, x2, y2 = enum[1]
             m3, x3, y3 = enum[2]
 
-            min_weight, mm = None, ""
+            # min_weight: 可以走的方向下，最小的惩罚是多少
+            min_weight = None
             for m, x, y in grab_player_next:
-                if x == x1 and y == y1:
-                    continue
-                if x == x2 and y == y2:
-                    continue
-                if x == x3 and y == y3:
-                    continue
 
-                dis1 = mLegStart.get_short_length(x1, y1, x, y)
-                dis2 = mLegStart.get_short_length(x2, y2, x, y)
-                dis3 = mLegStart.get_short_length(x3, y3, x, y)
+                force_point_x, force_point_y = self.get_force_point(enum, x, y)
+                url_dis = 0.5 * math.sqrt(force_point_x ** 2 + force_point_y ** 2)
+                weight = 1.0 / math.exp(url_dis)
 
-                if dis1 > 1 or dis2 > 1 or dis3 > 1:
-                    continue
-                flag = True
-
-                weight = float("%.3f" % (1.0 / math.exp(dis1)))
-                weight += float("%.3f" % (1.0 / math.exp(dis2)))
-                weight += float("%.3f" % (1.0 / math.exp(dis3)))
+                # weight = self.get_weight_dis(x1, y1, x, y)
+                # weight += self.get_weight_dis(x2, y2, x, y)
+                # weight += self.get_weight_dis(x3, y3, x, y)
 
                 if min_weight == None or weight < min_weight:
-                    min_weight, mm = weight, m
+                    min_weight = weight
 
-            if ans_weight == None or min_weight == None or min_weight > ans_weight:
-                ans_weight = min_weight
-                ans_move = [m1, m2, m3, mm]
+            if max_weight == None or min_weight > max_weight:
+                max_weight, ans_move = weight, [m1, m2, m3]
 
-        if flag == False:
-            return 0
+            # weight = self.get_weight_dis(x1, y1, runx, runy)
+            # weight += self.get_weight_dis(x2, y2, runx, runy)
+            # weight += self.get_weight_dis(x3, y3, runx, runy)
 
-        min_weight = None
-        for enum in all_enums:
-            m1, x1, y1 = enum[0]
-            m2, x2, y2 = enum[1]
-            m3, x3, y3 = enum[2]
-
-            mm = ans_move[3]
-            x, y = self.mRoundObj.real_go_point(
-                self.grab_player.predict_x, self.grab_player.predict_y, mm)
-            dis1 = mLegStart.get_short_length(x1, y1, x, y)
-            dis2 = mLegStart.get_short_length(x2, y2, x, y)
-            dis3 = mLegStart.get_short_length(x3, y3, x, y)
-
-            weight = float("%.3f" % (1.0 / math.exp(dis1)))
-            weight += float("%.3f" % (1.0 / math.exp(dis2)))
-            weight += float("%.3f" % (1.0 / math.exp(dis3)))
-
-            if min_weight == None or weight > min_weight:
-                min_weight, ans_move = weight, [m1, m2, m3, mm]
-
-        # # 预判的敌人是不动的
-        # if self.grab_player.move == "" and self.if_predict_right == True:
-        #     used = set()
-        #     for index, player in enumerate(follow_players):
-        #         min_dis, min_move, min_cell = self.get_min_dis(
-        #             player, self.grab_player.predict_x, self.grab_player.predict_y, used)
-
-        #         ans_move[index] = min_move
-        #         used.add(min_cell)
+            # if max_weight == None or weight > max_weight:
+            #     max_weight, ans_move = weight, [m1, m2, m3]
 
         for index in range(3):
             follow_players[index].move = ans_move[index]
@@ -311,25 +354,20 @@ class DoThink(Action):
                 follow_players[index].id, follow_players[index].x, follow_players[index].y, ans_move[index]
             ))
 
-        self.grab_player.runx, self.grab_player.runy = self.mRoundObj.real_go_point(
-            self.grab_player.predict_x, self.grab_player.predict_y, ans_move[3])
-        self.grab_player.move = ans_move[3]
+        self.grab_player.move, self.grab_player.runx, self.grab_player.runy = run_move, runx, runy
 
         mLogger.info("> 敌人 < [player: {}; point: ({}, {}); predict: ({}, {}); move: {}]".format(
             self.grab_player.id, self.grab_player.x, self.grab_player.y, self.grab_player.predict_x,
-            self.grab_player.predict_y, ans_move[3]
+            self.grab_player.predict_y, self.grab_player.move
         ))
 
-        self.need_log_run = True
-        return 1
+        # self.need_log_run = True
+        return True
 
     # 抓鱼部分
     def follow_grab_player(self, follow_players):
-        flag = self.force_enum(follow_players)
-        if flag == -1:
-            return True
-        if flag == 1:
-            return False
+        if True == self.force_enum(follow_players):
+            return
 
         vis_point = set()
         self.get_runaway_point(follow_players)
@@ -337,10 +375,6 @@ class DoThink(Action):
         min_dis, min_index, ret_move, ret_cell = None, None, None, None
 
         for index, player in enumerate(follow_players):
-            if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
-                mLogger.info("假装追到了，或者视野预判失误")
-                return True
-
             dis, move, cell_id = self.get_min_dis(
                 player, self.grab_player.predict_x, self.grab_player.predict_y)
             # dis, move, cell_id = self.get_min_dis(
@@ -392,6 +426,15 @@ class DoThink(Action):
         if self.grab_player.x == self.grab_player.predict_x and self.grab_player.y == self.grab_player.predict_y:
             return None
 
+    # 判断有没有抓住鱼
+    def match_catch_grab(self, follow_players):
+        for player in follow_players:
+            if player.x == self.grab_player.predict_x and player.y == self.grab_player.predict_y:
+                mLogger.info("假装追到了，或者视野预判失误")
+                return True
+        return False
+
+    # 记录预判位置次数
     def log_catch_num(self):
         if self.grab_player == None:
             return
@@ -440,11 +483,12 @@ class DoThink(Action):
         follow_players, power_player = self.get_follow_power_player()
 
         # 假装追到鱼了，或者视野预判失误
-        if True == self.follow_grab_player(follow_players):
+        if True == self.match_catch_grab(follow_players):
             self.grab_player = None
             players = [p for k, p in mPlayers.iteritems() if p.sleep == False]
             self.eat_power(players)
         else:
+            self.follow_grab_player(follow_players)
             self.eat_power(power_player)
 
 

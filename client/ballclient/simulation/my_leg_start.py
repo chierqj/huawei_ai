@@ -19,6 +19,7 @@ class LegStart(object):
         self.direction = ['down', 'up', 'right', 'left']
         self.tol_cells = 0
         self.fa = []
+        self.graph_weight = dict()
 
     # 更新最短路径的二维字典，u-v的路径是个list
     def update_short_path_dict(self, key1, key2, value):
@@ -305,6 +306,38 @@ class LegStart(object):
             mLogger.warning("({}, {}) 到 ({}, {})找不到最短路".format(x1, y1, x2, y2))
         return result
 
+    def cal_grath_weight(self):
+        width = mLegStart.msg['msg_data']['map']['width']
+        height = mLegStart.msg['msg_data']['map']['height']
+
+        for x in range(width):
+            for y in range(height):
+                dis = 0
+                tx1, ty1 = x, y
+                tx2, ty2 = x, y
+                tx3, ty3 = x, y
+                tx4, ty4 = x, y
+
+                while True:
+                    if False == self.match_border(tx1, ty1):
+                        break
+                    if False == self.match_border(tx2, ty2):
+                        break
+                    if False == self.match_border(tx3, ty3):
+                        break
+                    if False == self.match_border(tx4, ty4):
+                        break
+                    dis += 1
+                    tx1 -= 1
+                    tx2 += 1
+                    ty3 -= 1
+                    ty4 += 1
+
+                cell_id = mLegStart.get_cell_id(x, y)
+                self.graph_weight[cell_id] = dis
+        # for k, v in self.graph_weight.iteritems():
+        #     mLogger.info("k: {}; v: {}".format(k, v))
+
     # 初始化地图数组
     def initialize_graph(self, width, height):
         self.graph = [['.'] * width for _ in range(height)]
@@ -344,6 +377,7 @@ class LegStart(object):
         self.graph = []    # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
         self.tol_cells = 0
         self.fa = []
+        self.graph_weight.clear()
         mPlayers.clear()
         othPlayers.clear()
         mLogger.info(self.msg)
@@ -362,6 +396,8 @@ class LegStart(object):
         self.create_graph()
         # 预处理所有传送带的位置，这个传送到可以直接到哪里
         self.init_tunnel_go()
+        # 计算地图自身每个点的权重
+        self.cal_grath_weight()
 
 
 mLegStart = LegStart()
