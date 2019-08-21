@@ -66,28 +66,35 @@ class Action(object):
             result.append((move, go_x, go_y))
         return result
 
+    # 获取x, y的可行位置的数目
+    def get_next_one_num(self, x, y, vis_point=set()):
+        moves = ['up', 'down', 'left', 'right']
+        result = 0
+        for move in moves:
+            # 获取move之后真正到达的位置
+            go_x, go_y = self.mRoundObj.real_go_point(x, y, move)
+            if False == self.mRoundObj.match_border(go_x, go_y):
+                continue
+            if True == self.mRoundObj.match_meteor(go_x, go_y):
+                continue
+            if go_x == x and go_y == y:
+                continue
+            go_cell_id = mLegStart.get_cell_id(go_x, go_y)
+            # vis_point 控制多条鱼尽量不重叠
+            if go_cell_id in vis_point:
+                continue
+            result += 1
+        return result
+
     # 初始化评分
     def initial_weight_moves(self):
         self.weight_moves.clear()
 
-    '''
-    奖励评分：
-    1. 金币
-    2. 虫洞
-    3. 其他玩家
-    '''
-
+    # 奖励评分
     def reward_weight(self, player, next_one_points):
         pass
 
-    '''
-    惩罚评分：
-    1. 其他玩家
-    2. 之前是否走过（很小的权重，避免原地打转用的） 
-    3. 障碍物
-    4. 金币周围情况
-    '''
-
+    # 惩罚评分
     def punish_weight(self, player, next_one_points):
         pass
 
@@ -99,29 +106,7 @@ class Action(object):
                 max_weight, ret_move = weight, move
         return ret_move
 
-    # 对每一个玩家开始执行
-    def do_excute(self):
-        vis_point = set()
-        for k, player in mPlayers.iteritems():
-            next_one_points = self.get_next_one_points(player, vis_point)
-            if len(next_one_points) == 0:
-                player.move = ""
-                continue
-
-            self.initial_weight_moves()
-            self.reward_weight(player, next_one_points)
-            self.punish_weight(player, next_one_points)
-
-            ret_move = self.select_best_move()
-            player.move = ret_move
-
-            ret_x, ret_y = self.mRoundObj.real_go_point(
-                player.x, player.y, ret_move)
-            ret_cell_id = mLegStart.get_cell_id(ret_x, ret_y)
-            vis_point.add(ret_cell_id)
-
-            self.record_detial(player, ret_move)
-
+    # 入口
     def excute(self, mRoundObj):
         self.mRoundObj = mRoundObj
         self.do_excute()

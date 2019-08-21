@@ -121,6 +121,7 @@ class Round(object):
             value.initialize()
             value.update_last_appear()
 
+    # 看到能量的时候，给周围视野范围内的能量值都累加
     def add_neighbar_power(self, x, y, point):
         width = mLegStart.msg['msg_data']['map']['width']
         height = mLegStart.msg['msg_data']['map']['height']
@@ -131,6 +132,7 @@ class Round(object):
             for j in range(y1, y2 + 1):
                 self.neighbar_power[i][j] += point
 
+    # 更新一下所有玩家的状态
     def update_player_wait_set(self):
         if False == self.check_players():
             return
@@ -184,6 +186,7 @@ class Round(object):
                         last_appear_dis=0
                     )
 
+    # 更新一下能量的状态
     def update_power_wait_set(self):
         for k, v in self.POWER_WAIT_SET.iteritems():
             v.update_last_appear()
@@ -209,11 +212,13 @@ class Round(object):
                 )
                 self.add_neighbar_power(power['x'], power['y'], power['point'])
 
+    # 打印日志
     def print_log(self):
         round_id = self.msg['msg_data']['round_id']
         mLogger.info(
             "\n\n-------------------------[round: {}]-------------------------\n".format(round_id))
 
+    # 更新一下每个鱼访问过的点
     def update_vis_set(self):
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
