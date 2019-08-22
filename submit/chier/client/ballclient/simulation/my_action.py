@@ -17,47 +17,26 @@ class Action(object):
         self.weight_moves = dict()
 
     # 打印详细log
-    def record_detial(self, player, move):
-        if False == config.record_detial or None == move:
+    def record_detial(self, player):
+        if False == config.record_detial:
             return
 
         mLogger.info(self.weight_moves)
         mLogger.info('[fish: {}, from: ({}, {}), move: {}]'.format(
-            player.id, player.x, player.y, move))
+            player.id, player.x, player.y, player.move))
 
     # 获取下一步移动的位置，仅判断是不是合法
-    def get_next_one_points(self, player, vis_point=set()):
+    def get_next_one_points(self, x, y, vis_point=set()):
         moves = ['up', 'down', 'left', 'right']
         result = []
         for move in moves:
             # 获取move之后真正到达的位置
-            go_x, go_y = self.mRoundObj.real_go_point(player.x, player.y, move)
+            go_x, go_y = self.mRoundObj.real_go_point(x, y, move)
             if False == self.mRoundObj.match_border(go_x, go_y):
                 continue
             if True == self.mRoundObj.match_meteor(go_x, go_y):
                 continue
-            if go_x == player.x and go_y == player.y:
-                continue
-            go_cell_id = mLegStart.get_cell_id(go_x, go_y)
-            # vis_point 控制多条鱼尽量不重叠
-            if go_cell_id in vis_point:
-                continue
-            result.append((move, go_x, go_y))
-        return result
-
-    # 获取以predict为出发点下一步移动的位置，仅判断是不是合法
-    def get_predict_next_one_points(self, player, vis_point=set()):
-        moves = ['up', 'down', 'left', 'right']
-        result = []
-        for move in moves:
-            # 获取move之后真正到达的位置
-            go_x, go_y = self.mRoundObj.real_go_point(
-                player.predict_x, player.predict_y, move)
-            if False == self.mRoundObj.match_border(go_x, go_y):
-                continue
-            if True == self.mRoundObj.match_meteor(go_x, go_y):
-                continue
-            if go_x == player.x and go_y == player.y:
+            if go_x == x and go_y == y:
                 continue
             go_cell_id = mLegStart.get_cell_id(go_x, go_y)
             # vis_point 控制多条鱼尽量不重叠
@@ -86,25 +65,80 @@ class Action(object):
             result += 1
         return result
 
-    # 初始化评分
-    def initial_weight_moves(self):
-        self.weight_moves.clear()
+    # 扩展两层会有哪些点
+    def get_extend_points(self, x, y):
+        import Queue
 
-    # 奖励评分
-    def reward_weight(self, player, next_one_points):
-        pass
+        q = Queue.Queue()
+        vis = set()
 
-    # 惩罚评分
-    def punish_weight(self, player, next_one_points):
-        pass
+        start = mLegStart.get_cell_id(x, y)
 
-    # 挑选一个评分最高的move
-    def select_best_move(self):
-        max_weight, ret_move = None, None
-        for move, weight in self.weight_moves.iteritems():
-            if max_weight == None or weight > max_weight:
-                max_weight, ret_move = weight, move
-        return ret_move
+        q.put((start, 0))
+        vis.add(start)
+
+        result = [(0, x, y)]
+        while False == q.empty():
+            uid, step = q.get()
+
+            if step >= 2:
+                continue
+
+            ux, uy = mLegStart.get_x_y(uid)
+            next_one_points = self.get_next_one_points(ux, uy)
+
+            for mv, nx, ny in next_one_points:
+                cell_id = mLegStart.get_cell_id(nx, ny)
+                if cell_id in vis:
+                    continue
+                result.append((step, nx, ny))
+                vis.add(cell_id)
+                q.put((cell_id, step + 1))
+
+        return result
+
+    # 获取players的所有可能的情况
+    @msimulog()
+    def get_all_enums(self, next_one_points):
+        result = []
+        up = len(next_one_points)
+
+        def dfs(dep, enum=[]):
+            if dep == up:
+                import copy
+                result.append(copy.deepcopy(enum))
+                return
+            for mv, nx, ny in next_one_points[dep]:
+                dfs(dep + 1, enum + [(mv, nx, ny)])
+        dfs(0)
+
+        return result
+
+    # 当鱼视野丢失的时候，预判他行走的位置
+    def predict_player_point(self, pre_player):
+        vision = mLegStart.msg['msg_data']['map']['vision']
+        next_one_points = self.get_next_one_points(pre_player.x, pre_player.y)
+
+        for move, go_x, go_y in next_one_points:
+            have_view = False
+            for k, player in mPlayers.iteritems():
+                if go_x < player.x - vision or go_x > player.x + vision:
+                    continue
+                if go_y < player.y - vision or go_y > player.y + vision:
+                    continue
+                have_view = True
+                break
+            if have_view == False:
+                pre_player.predict_x, pre_player.predict_y = go_x, go_y
+
+        if pre_player.predict_x == None:
+            mLogger.warning("> 预判没有位置 < [player: {}; point: ({}, {})]".format(
+                pre_player.id, pre_player.x, pre_player.y,
+            ))
+        else:
+            mLogger.info(">预判< [player: {}; point: ({}, {}); predict: ({}, {})]".format(
+                pre_player.id, pre_player.x, pre_player.y, pre_player.predict_x, pre_player.predict_y
+            ))
 
     # 入口
     def excute(self, mRoundObj):

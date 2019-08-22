@@ -23,6 +23,7 @@ class Round(object):
         self.POWER_WAIT_SET = dict()
         self.neighbar_power = None
         self.my_alive_player_num = 0
+        self.limit_dead_weight = -1.0
 
     # 暴露给service使用的，获取最终结果
     def get_result(self):
@@ -223,8 +224,8 @@ class Round(object):
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 player.vis_cell.clear()
-                mLogger.warning("fish: {}; point: ({}, {})睡眠，被吃了".format(
-                    player.id, player.x, player.y))
+                mLogger.warning(">睡眠，被吃了< [fish: {}; point: ({}, {}); move: {}; dead_weight: {}]".format(
+                    player.id, player.x, player.y, player.move, player.dead_weight))
             else:
                 cell_id = mLegStart.get_cell_id(player.x, player.y)
                 player.vis_cell.add(cell_id)

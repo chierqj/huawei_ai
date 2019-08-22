@@ -341,33 +341,6 @@ class DoThink(Action):
             mLogger.info(">抓鱼< [player: {}; point: ({}, {}); move: {}]".format(
                 player.id, player.x, player.y, player.move))
 
-    # 当鱼视野丢失的时候，预判他行走的位置
-    def predict_grab_player(self):
-        vision = mLegStart.msg['msg_data']['map']['vision']
-        next_one_points = self.get_next_one_points(
-            self.grab_player.x, self.grab_player.y, set())
-
-        for move, go_x, go_y in next_one_points:
-            have_view = False
-            for k, player in mPlayers.iteritems():
-                if go_x < player.x - vision or go_x > player.x + vision:
-                    continue
-
-                if go_y < player.y - vision or go_y > player.y + vision:
-                    continue
-
-                have_view = True
-                break
-            if have_view == False:
-                self.grab_player.predict_x = go_x
-                self.grab_player.predict_y = go_y
-
-        mLogger.info(">预判< [player: {}; point: ({}, {}); predict: ({}, {})]".format(
-            self.grab_player.id, self.grab_player.x, self.grab_player.y, self.grab_player.predict_x, self.grab_player.predict_y
-        ))
-        if self.grab_player.x == self.grab_player.predict_x and self.grab_player.y == self.grab_player.predict_y:
-            return None
-
     # 判断有没有抓住鱼
     def match_catch_grab(self, follow_players):
         for player in follow_players:
@@ -421,7 +394,7 @@ class DoThink(Action):
         self.grab_player.predict_y = self.grab_player.y
         # 要追的鱼看不到了，预判位置
         if self.grab_player.visiable == False:
-            self.predict_grab_player()
+            self.predict_player_point(self.grab_player)
 
         follow_players, power_player = self.get_follow_power_player()
 

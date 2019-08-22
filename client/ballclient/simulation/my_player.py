@@ -42,6 +42,9 @@ class Player(object):
         self.runx = None
         self.runy = None
 
+        # 死亡的weight
+        self.dead_weight = None
+
 
     def initialize(self):
         self.sleep = True
