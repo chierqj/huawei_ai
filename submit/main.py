@@ -25,7 +25,4 @@ if __name__ == "__main__":
         exit()
     config.team_id = team_id
 
-    for i in range(20):
-        print("-------------------- battle: {} --------------------".format(i + 1))
-        client.start(server_ip, port)
-        time.sleep(1)
+    client.start(server_ip, port)

@@ -36,7 +36,7 @@ int main() {
 	for (int i = 0; i < k; i++) {
 		ofstream o("../log/result_many.txt", ios::app);
 		o << "-------------- Battle: " << i + 1 << " ----------------\n";
-		system("cd /d C:/Users/chier/Desktop/huawei_ai/ & start /min run1.bat");
+		system("cd /d C:/Users/chier/Desktop/huawei_ai/client & python -m ballclient.main 1001 127.0.0.1 6001 > ../log/tmp_score.txt");
 
 		char result[1024 * 4] = "";
 		if (1 == execmd("cd /d C:/Users/chier/Desktop/huawei_ai/server & BattleServer.exe map_r2m1.txt 127.0.0.1 6001", result)) {
