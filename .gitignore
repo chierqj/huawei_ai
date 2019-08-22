@@ -112,3 +112,5 @@ log/*
 doc/*
 .vscode
 null
+
+battle_test/*
