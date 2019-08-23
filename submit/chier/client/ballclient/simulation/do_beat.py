@@ -123,14 +123,6 @@ class DoBeat(Action):
             self.record_detial(player, ret_move)
     '''
 
-    def match_have_othplayer(self, x, y):
-        for l, player in othPlayers.iteritems():
-            if player.visiable == False:
-                continue
-            if player.x == x and player.y == y:
-                return True
-        return False
-
     def reward_power(self, px, py):
         max_weight, sum_weight = 0, 0
         for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
@@ -168,6 +160,14 @@ class DoBeat(Action):
                 min_dis, player.move = dis, mv
         return True
 
+    def in_player_vision(self, px, py, x, y):
+        vision = mLegStart.msg['msg_data']['map']['vision']
+        if x < px - vision or x > px + vision:
+            return False
+        if y < py - vision or y > py + vision:
+            return False
+        return True
+
     def get_weight(self, enum, x, y):
         dead_area = [(1, 0), (17, 19)]
         if (x, y) in dead_area:
@@ -176,7 +176,8 @@ class DoBeat(Action):
         weight = 0
         for mv, nx, ny in enum:
             dis = mLegStart.get_short_length(nx, ny, x, y)
-            weight -= float("%.2f" % (1.0 / math.exp(dis)))
+            if dis <= 4 and True == self.in_player_vision(nx, ny, x, y):
+                weight -= float("%.2f" % (1.0 / math.exp(dis)))
 
         weight = float("%.2f" % weight)
         return weight
@@ -231,7 +232,8 @@ class DoBeat(Action):
             if danger_weight > self.mRoundObj.limit_dead_weight:
                 if False == self.eat_power(next_one_points, player):
                     length = len(next_one_points)
-                    player.move = next_one_points[random.randint(0, length - 1)][0]
+                    player.move = next_one_points[random.randint(
+                        0, length - 1)][0]
             else:
                 player.move = ret_move
                 # vis_point.add(ret_cell)

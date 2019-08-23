@@ -169,17 +169,21 @@ class DoBeat(Action):
         return True
 
     def get_weight(self, enum, x, y):
-        dead_area = [(1, 0), (17, 19)]
-        if (x, y) in dead_area:
-            return -3.0
+        # dead_area = [(1, 0), (17, 19)]
+        # if (x, y) in dead_area:
+        #     return -3.0
 
-        weight = 0
+        weight = []
+        cell = mLegStart.get_cell_id(x, y)
+        cell_weight = mLegStart.graph_weight[cell]
         for mv, nx, ny in enum:
             dis = mLegStart.get_short_length(nx, ny, x, y)
-            if dis <= 4 and True == self.in_player_vision(nx, ny, x, y):
-                weight -= float("%.2f" % (1.0 / math.exp(dis)))
+            url_dis = math.sqrt((nx - x) ** 2 + (ny - y) ** 2)
+            weight.append({'dis': dis, 'url_dis': url_dis, "cell_weight": cell_weight})
 
-        weight = float("%.2f" % weight)
+        mLogger.info(weight)
+        weight = sorted(weight, key=lambda it:it['dis'])
+
         return weight
 
     def do_excute(self):
@@ -205,7 +209,7 @@ class DoBeat(Action):
                 continue
             next_one_points = self.get_next_one_points(
                 player.x, player.y, vis_point)
-            next_one_points.append(("", player.x, player.y))
+            # next_one_points.append(("", player.x, player.y))
 
             # 最低最高
             max_weight, ret_move, ret_cell = None, None, None
@@ -218,6 +222,7 @@ class DoBeat(Action):
                     weight = self.get_weight(enum, nx, ny)
                     if min_weight == None or weight < min_weight:
                         min_weight = weight
+                    break
 
                 if max_weight == None or min_weight > max_weight:
                     max_weight, ret_move = min_weight, mv
