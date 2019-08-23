@@ -11,5 +11,5 @@ cd chier
 rm -rf client/gameclient.bat
 
 
-zip -r chier.zip *
-mv chier.zip ../
+zip -r chier_111.zip *
+mv chier_111.zip ../

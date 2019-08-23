@@ -6,6 +6,7 @@
 from ballclient.auth import config
 from ballclient.comunicate import client
 import sys
+import time
 
 if __name__ == "__main__":
     print sys.argv
@@ -23,4 +24,5 @@ if __name__ == "__main__":
         print "team_id and port must be digit."
         exit()
     config.team_id = team_id
+
     client.start(server_ip, port)

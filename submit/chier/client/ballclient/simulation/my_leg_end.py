@@ -23,9 +23,9 @@ class LegEnd(object):
             point.append(team['point'])
             self.tolPoint[str(team['id'])] = point
 
-        print("-------------------------------------------------")
-        print(">预判逃跑位置< [正确: {}; 错误: {}]".format(
-            self.catch_run, self.not_catch_run))
+        # print("-------------------------------------------------")
+        # print(">预判逃跑位置< [正确: {}; 错误: {}]".format(
+        #     self.catch_run, self.not_catch_run))
         # print(">预判视野丢失< [总计: {}; 正确: {}]".format(
         #     self.tol_predict, self.catch_predict))
 
