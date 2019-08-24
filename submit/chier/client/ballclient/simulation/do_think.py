@@ -196,55 +196,66 @@ class DoThink(Action):
         mLogger.info(log_info)
 
     # 获取所有可能情况
-    def get_enums(self, follow_players):
-        '''
-        1. 抓鱼的鱼的枚举位置不能重复，包括原地不动
-        2. 敌人的移动位置不能包括我的鱼这一回合在的位置
-        '''
-        vis_point = set()
-        next_one_points_ary = []
-        for player in follow_players:
-            tmp = self.get_next_one_points(player.x, player.y)
-            tmp.append(("", player.x, player.y))
-            next_one_points_ary.append(tmp)
-            cell = mLegStart.get_cell_id(player.x, player.y)
-            vis_point.add(cell)
+    # def get_enums(self, follow_players):
+    #     '''
+    #     1. 抓鱼的鱼的枚举位置不能重复，包括原地不动
+    #     2. 敌人的移动位置不能包括我的鱼这一回合在的位置
+    #     '''
+    #     vis_point = set()
+    #     next_one_points_ary = []
+    #     for player in follow_players:
+    #         tmp = self.get_next_one_points(player.x, player.y)
+    #         tmp.append(("", player.x, player.y))
+    #         next_one_points_ary.append(tmp)
+    #         cell = mLegStart.get_cell_id(player.x, player.y)
+    #         vis_point.add(cell)
 
-        grab_player_next = self.get_next_one_points(
-            self.grab_player.predict_x, self.grab_player.predict_y, vis_point)
-        grab_player_next.append(
-            ("", self.grab_player.predict_x, self.grab_player.predict_y))
+    #     grab_player_next = self.get_next_one_points(
+    #         self.grab_player.predict_x, self.grab_player.predict_y, vis_point)
+    #     grab_player_next.append(
+    #         ("", self.grab_player.predict_x, self.grab_player.predict_y))
 
-        all_enums = []
-        for m1, x1, y1 in next_one_points_ary[0]:
-            for m2, x2, y2 in next_one_points_ary[1]:
-                if x1 == x2 and y1 == y2:
-                    continue
-                for m3, x3, y3 in next_one_points_ary[2]:
-                    if x1 == x3 and y1 == y3:
-                        continue
-                    if x2 == x3 and y2 == y3:
-                        continue
-                    all_enums.append(
-                        [(m1, x1, y1), (m2, x2, y2), (m3, x3, y3)])
-        return all_enums, grab_player_next
+    #     all_enums = []
+    #     for m1, x1, y1 in next_one_points_ary[0]:
+    #         for m2, x2, y2 in next_one_points_ary[1]:
+    #             if x1 == x2 and y1 == y2:
+    #                 continue
+    #             for m3, x3, y3 in next_one_points_ary[2]:
+    #                 if x1 == x3 and y1 == y3:
+    #                     continue
+    #                 if x2 == x3 and y2 == y3:
+    #                     continue
+    #                 all_enums.append(
+    #                     [(m1, x1, y1), (m2, x2, y2), (m3, x3, y3)])
+    #     return all_enums, grab_player_next
+
+    # vis_point是有鱼的位置，不能走
+    def get_safe_num(self, grab_next_points, vis_point):
+        safe_num = len(grab_next_points)
+        for mv, nx, ny in grab_next_points:
+            for cell in vis_point:
+                x, y = mLegStart.get_x_y(cell)
+                dis = mLegStart.get_short_length(x, y, nx, ny)
+                if dis <= 1:
+                    safe_num -= 1
+                    break
+        return safe_num
 
     # 判断是不是需要暴力枚举，只有在视野范围内才暴力
-    def match_need_force_enum(self, follow_players, grab_next_num):
+
+    def match_need_force_enum(self, follow_players, vis_point, safe_num):
+        grab_next_points = self.get_next_one_points(
+            self.grab_player.x, self.grab_player.y, vis_point)
+
+        return True
+
+    def get_init_vis_point(self, follow_players):
         vis_point = set()
         for player in follow_players:
-            dis = mLegStart.get_short_length(
-                player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
-            if dis > 4:
-                return False
-
             cell = mLegStart.get_cell_id(player.x, player.y)
             vis_point.add(cell)
-        grab_next_num = self.get_next_one_num(
-            self.grab_player.predict_x, self.grab_player.predict_y, vis_point)
-        return grab_next_num <= 2
+        return vis_point
 
-    # 计算两个点，(x1, y1) -> (x2, y2)的评分
     def get_weight_dis(self, follow_players, enum, x, y):
         m1, x1, y1 = enum[0]
         m2, x2, y2 = enum[1]
@@ -268,28 +279,43 @@ class DoThink(Action):
         3. 获取敌人可能逃跑的位置
         4. 对逃跑的位置进行惩罚最大抓捕
         '''
-        grab_next_num = 0
-        if False == self.match_need_force_enum(follow_players, grab_next_num):
-            return False
-        all_enums, grab_player_next = self.get_enums(follow_players)
-        if all_enums == None:
+        # 我的鱼所在的位置
+        vis_point = self.get_init_vis_point(follow_players)
+        grab_next_points = self.get_next_one_points(
+            self.grab_player.predict_x, self.grab_player.predict_y, vis_point)
+        init_safe_num = self.get_safe_num(grab_next_points, vis_point)
+
+        if init_safe_num > 2:
             return False
 
-        limit_weight = grab_next_num
-        min_weight, ans_move = None, None
+        next_one_points_ary = []
+        for player in follow_players:
+            next_one_points = self.get_next_one_points(player.x, player.y)
+            next_one_points_ary.append(next_one_points)
+        all_enums = self.get_all_enums(next_one_points_ary)
+
+        min_safe_num, min_can_go_num, ans_move = None, None, None
         for enum in all_enums:
-            max_weight = None
-            for m, x, y in grab_player_next:
-                weight = self.get_weight_dis(follow_players, enum, x, y)
-                if max_weight == None or weight > max_weight:
-                    max_weight = weight
-            if max_weight < limit_weight:
+            import copy
+            tmp_vis_point = copy.deepcopy(vis_point)
+            for enm, enx, eny in enum:
+                cell = mLegStart.get_cell_id(enx, eny)
+                tmp_vis_point.add(cell)
+            safe_num = self.get_safe_num(grab_next_points, tmp_vis_point)
+            can_go_num = self.get_next_one_num(
+                self.grab_player.predict_x, self.grab_player.predict_y, tmp_vis_point)
+            
+            if safe_num > init_safe_num:
                 continue
-            if min_weight == None or max_weight < min_weight:
-                min_weight, ans_move = max_weight, [
-                    enum[0][0], enum[1][0], enum[2][0]]
+            if min_safe_num == None:
+                min_safe_num, min_can_go_num = safe_num, can_go_num
+                ans_move = [enum[0][0], enum[1][0], enum[2][0]]
+                continue
+            if safe_num < min_safe_num or (safe_num == min_safe_num and can_go_num < min_can_go_num):
+                min_safe_num, min_can_go_num = safe_num, can_go_num
+                ans_move = [enum[0][0], enum[1][0], enum[2][0]]
 
-        if min_weight == None:
+        if ans_move == None:
             return False
 
         for index in range(3):
