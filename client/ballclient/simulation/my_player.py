@@ -4,7 +4,7 @@ from ballclient.utils.logger import mLogger
 
 
 class Player(object):
-    def __init__(self, fish_id, team_id, force, score, sleep, x, y, visiable, last_appear_dis):
+    def __init__(self, fish_id=-1, team_id=-1, force="", score=0, sleep=True, x=-1, y=-1, visiable=False, last_appear_dis=300):
         # 在legstart更新的变量
         self.id = fish_id
         self.team = team_id
@@ -45,6 +45,8 @@ class Player(object):
         # 死亡的weight
         self.dead_weight = None
 
+        # 丢失视野连续多少回合
+        self.lost_vision_num = 0
 
     def initialize(self):
         self.sleep = True

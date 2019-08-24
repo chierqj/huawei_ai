@@ -98,18 +98,17 @@ class Action(object):
         return result
 
     # 获取players的所有可能的情况
-    @msimulog()
     def get_all_enums(self, next_one_points):
         result = []
         up = len(next_one_points)
-
+        
         def dfs(dep, enum=[]):
             if dep == up:
                 import copy
                 result.append(copy.deepcopy(enum))
                 return
-            for mv, nx, ny in next_one_points[dep]:
-                dfs(dep + 1, enum + [(mv, nx, ny)])
+            for pid, mv, nx, ny in next_one_points[dep]:
+                dfs(dep + 1, enum + [(pid, mv, nx, ny)])
         dfs(0)
 
         return result

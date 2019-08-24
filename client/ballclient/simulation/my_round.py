@@ -95,7 +95,7 @@ class Round(object):
 
         # 调用函数获取action
         action = []
-        if self.msg['msg_data']['mode'] == "beat":
+        if self.msg['msg_data']['mode'] != mLegStart.my_team_force:
             action = mDoBeat.excute(self)
         else:
             # action = mDoBeat.excute(self)
@@ -142,27 +142,14 @@ class Round(object):
             team_id = player.get("team", -1)
             pid = player.get("id", -1)
             if team_id == config.team_id:
-                if pid in mPlayers:
-                    mPlayers[pid].assign(
-                        last_appear_dis=0,
-                        score=player['score'],
-                        sleep=(False if player['sleep'] == 0 else True),
-                        x=player['x'],
-                        y=player['y'],
-                        visiable=True
-                    )
-                else:
-                    mPlayers[pid] = Player(
-                        fish_id=pid,
-                        team_id=team_id,
-                        force=self.msg['msg_data']['mode'],
-                        score=player['score'],
-                        sleep=(False if player['sleep'] == 0 else True),
-                        x=player['x'],
-                        y=player['y'],
-                        visiable=True,
-                        last_appear_dis=0
-                    )
+                mPlayers[pid].assign(
+                    last_appear_dis=0,
+                    score=player['score'],
+                    sleep=(False if player['sleep'] == 0 else True),
+                    x=player['x'],
+                    y=player['y'],
+                    visiable=True
+                )
                 self.my_alive_player_num += 1
             else:
                 if pid in othPlayers:
@@ -173,18 +160,6 @@ class Round(object):
                         x=player['x'],
                         y=player['y'],
                         visiable=True
-                    )
-                else:
-                    othPlayers[pid] = Player(
-                        fish_id=pid,
-                        team_id=team_id,
-                        force=self.msg['msg_data']['mode'],
-                        score=player['score'],
-                        sleep=(False if player['sleep'] == 0 else True),
-                        x=player['x'],
-                        y=player['y'],
-                        visiable=True,
-                        last_appear_dis=0
                     )
 
     # 更新一下能量的状态

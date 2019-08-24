@@ -63,15 +63,12 @@ class DoBeat(Action):
     def punish_player(self, player, move, px, py):
         max_weight, sum_weight = 0, 0
         for k, oth_player in othPlayers.iteritems():
+            if oth_player.visiable == False:
+                continue
             # 敌人到我的，敌人要吃我
             dis = mLegStart.get_short_length(
                 oth_player.x, oth_player.y, px, py)
             weight = float("%.5f" % (1.0 / math.exp(dis)))
-
-            if oth_player.visiable == False:
-                dis = config.PLAYER_ALPHA * dis + config.PLAYER_BELTA * oth_player.last_appear_dis
-                weight = 0.0 if dis == 0 else float(
-                    "%.5f" % (1.0 / math.exp(dis)))
 
             max_weight = max(max_weight, weight)
             sum_weight += weight
@@ -103,6 +100,8 @@ class DoBeat(Action):
     def do_excute(self):
         vis_point = set()
         for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
             round_id = self.mRoundObj.msg['msg_data']['round_id']
             # if round_id > 140 and round_id <= 150:
             #     player.move = ""
