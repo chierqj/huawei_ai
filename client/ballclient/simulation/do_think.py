@@ -22,12 +22,14 @@ class DoThink(Action):
         pass
 
     # 逼近策略
-    @msimulog()
     def approach_grab_player(self):
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
-            player.move = self.eat_power(player)
+            self.eat_power(player)
+            mLogger.info("[逼近] [player: {}; point: ({}, {}); move: {}]".format(
+                player.id, player.x, player.y, player.move
+            ))
 
     # vis_point是有鱼的位置，不能走
     def get_safe_num(self, grab_next_points, vis_point):
@@ -89,6 +91,7 @@ class DoThink(Action):
     # 敌人的安全位置为0，增员
     def increase_player(self, grab_player, danger_points):
         ret_dis, ret_key, ret_move = None, None, None
+        useful_key = []
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
@@ -101,15 +104,23 @@ class DoThink(Action):
                 player.x, player.y, grab_player.predict_x, grab_player.predict_y, danger_points)
             if ret_dis == None or dis < ret_dis:
                 ret_dis, ret_key, ret_move = dis, k, move
+            useful_key.append(k)
 
-        if ret_key != None:
-            mLogger.info("[增员] [player: {}; point: ({}, {})]".format(
-                mPlayers[ret_key].id, mPlayers[ret_key].x, mPlayers[ret_key].y
+        mLogger.info("开始增员以及吃能量......")
+
+        mPlayers[ret_key].move = ret_move
+        mLogger.info("[增员] [player: {}; point: ({}, {}); move: {}]".format(
+            mPlayers[ret_key].id, mPlayers[ret_key].x, mPlayers[ret_key].y, mPlayers[ret_key].move
+        ))
+        for key in useful_key:
+            if key == ret_key:
+                continue
+            self.eat_power(mPlayers[key])
+            mLogger.info("[能量] [player: {}; point: ({}, {}); move: {}]".format(
+                mPlayers[key].id, mPlayers[key].x, mPlayers[key].y, mPlayers[key].move
             ))
-            mPlayers[ret_key].move = ret_move
 
     # 实施抓捕(被抓的鱼，被抓的鱼下一个可以行走的位置，被抓的鱼这一回合的安全位置数目)
-
     def force_grab(self, grab_player, grab_next_points, limit_safe_num):
         '''
         1. 所有的鱼的枚举状态
@@ -164,21 +175,52 @@ class DoThink(Action):
     def select_best_result(self, results):
         return results[0]
 
+    def judge_in_vision(self, px, py, x, y):
+        vision = mLegStart.msg['msg_data']['map']['vision']
+        if x < px - vision or x > px + vision:
+            return False
+        if y < py - vision or y > py + vision:
+            return False
+        return True
+
     def eat_power(self, player):
-        next_one_points = self.get_next_one_points(player.x, player.y)
-        rd = random.randint(0, len(next_one_points) - 1)
-        return next_one_points[rd][0]
+        min_dis1, ans_move1 = None, None
+        min_dis2, ans_move2 = None, None
+
+        for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
+            dis, move, cell = self.get_min_dis(
+                player.x, player.y, power.x, power.y)
+
+            if power.visiable == True:
+                if min_dis1 == None or dis < min_dis1:
+                    min_dis1, ans_move1 = dis, move
+            elif False == self.judge_in_vision(power.x, power.y, player.x, player.y):
+                if min_dis2 == None or dis > min_dis2:
+                    min_dis2, ans_move2 = dis, move
+
+        if ans_move1 != None:
+            player.move = ans_move1
+            return
+        if ans_move2 != None:
+            player.move = ans_move2
+            return
+
+        next_one_points = self.get_next_one_points(
+            player.x, player.y, player.vis_cell)
+        if len(next_one_points) == 0:
+            mLogger.warning("[player: {}; point: ({}, {}); 无路可走]".format(
+                player.id, player.x, player.y
+            ))
+        player.move = next_one_points[0][0]
 
     # 围捕策略
     def force_grab_player(self):
         '''
         1. 敌人四条鱼，找能抓的鱼，暴力枚举
         2. 每一条被抓的鱼，暴力枚举会返回一个结果
-            a. 敌人的可行位置
-            b. 敌人的安全位置
-            c. 抓捕的鱼的动作
-            d. 抓捕之后敌人的安全位置
-            e. 或者None
+            a. 抓捕的鱼的动作
+            b. 抓捕之后敌人的安全位置
+            c. 或者None
         3. 在所有的抓捕动作中，选择一个收益最大的
         '''
         vis_point = set()
@@ -200,26 +242,33 @@ class DoThink(Action):
         success, results = False, []
         for k, oth_player in othPlayers.iteritems():
             if oth_player.predict_x == None:
-                mLogger.info("[player: {} 预判不到位置]\n".format(oth_player.id))
+                mLogger.info(
+                    "[敌人] [player: {} 预判不到位置; 不符合]\n".format(oth_player.id))
                 continue
 
             grab_next_points = self.get_next_one_points(
                 oth_player.predict_x, oth_player.predict_y, vis_point)
 
+            mLogger.info("[敌人] [player: {}; point: ({}, {}); grab_next: {}]".format(
+                oth_player.id, oth_player.predict_x, oth_player.predict_y, grab_next_points
+            ))
+
             param = dict()
-            if False == self.match_grab(oth_player, grab_next_points, vis_point, param):
+            flag = self.match_grab(
+                oth_player, grab_next_points, vis_point, param)
+            mLogger.info("[初始] [{}]".format(param))
+
+            if False == flag:
+                mLogger.info("[结果] [不符合]\n".format(oth_player.id))
                 continue
 
             limit_safe_num = param['limit_safe_num']
             if limit_safe_num == 0:
+                mLogger.info("[结果] [安全位置为0，增员或者直接干掉]\n".format(oth_player.id))
                 self.increase_player(oth_player, param['danger_points'])
+                return True
 
             ret = self.force_grab(oth_player, grab_next_points, limit_safe_num)
-
-            mLogger.info("[敌人] [player: {}; point: ({}, {}); grab_next: {}]".format(
-                oth_player.id, oth_player.predict_x, oth_player.predict_y, grab_next_points
-            ))
-            mLogger.info("[初始] [{}]".format(param))
             mLogger.info("[结果] [{}]\n".format(ret))
 
             if ret == None:
@@ -251,12 +300,18 @@ class DoThink(Action):
             else:
                 oth_player.predict_x, oth_player.predict_y = oth_player.x, oth_player.y,
                 oth_player.lost_vision_num = 0
-    # 执行入口
+            mLogger.info("[player: {}; point: ({}, {}); predict: ({}, {}); lost_vision_num: {}]".format(
+                oth_player.id, oth_player.x, oth_player.y, oth_player.predict_x, oth_player.predict_y, oth_player.lost_vision_num
+            ))
 
+    # 执行入口
     def do_excute(self):
+        mLogger.info("开始预判位置......")
         self.update_predict()
+        mLogger.info("开始进行围剿......")
         if True == self.force_grab_player():
             return
+        mLogger.info("围剿失败，开始逼近......")
         self.approach_grab_player()
 
 

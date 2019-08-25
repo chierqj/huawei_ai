@@ -130,14 +130,14 @@ class Action(object):
             if have_view == False:
                 pre_player.predict_x, pre_player.predict_y = go_x, go_y
 
-        if pre_player.predict_x == None:
-            mLogger.warning("> 预判没有位置 < [player: {}; point: ({}, {})]".format(
-                pre_player.id, pre_player.x, pre_player.y,
-            ))
-        else:
-            mLogger.info(">预判< [player: {}; point: ({}, {}); predict: ({}, {})]".format(
-                pre_player.id, pre_player.x, pre_player.y, pre_player.predict_x, pre_player.predict_y
-            ))
+        # if pre_player.predict_x == None:
+        #     mLogger.warning("> 预判没有位置 < [player: {}; point: ({}, {})]".format(
+        #         pre_player.id, pre_player.x, pre_player.y,
+        #     ))
+        # else:
+        #     mLogger.info(">预判< [player: {}; point: ({}, {}); predict: ({}, {})]".format(
+        #         pre_player.id, pre_player.x, pre_player.y, pre_player.predict_x, pre_player.predict_y
+        #     ))
 
     # 入口
     def excute(self, mRoundObj):

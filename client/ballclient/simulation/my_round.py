@@ -152,15 +152,14 @@ class Round(object):
                 )
                 self.my_alive_player_num += 1
             else:
-                if pid in othPlayers:
-                    othPlayers[pid].assign(
-                        last_appear_dis=0,
-                        score=player['score'],
-                        sleep=(False if player['sleep'] == 0 else True),
-                        x=player['x'],
-                        y=player['y'],
-                        visiable=True
-                    )
+                othPlayers[pid].assign(
+                    last_appear_dis=0,
+                    score=player['score'],
+                    sleep=(False if player['sleep'] == 0 else True),
+                    x=player['x'],
+                    y=player['y'],
+                    visiable=True
+                )
 
     # 更新一下能量的状态
     def update_power_wait_set(self):
