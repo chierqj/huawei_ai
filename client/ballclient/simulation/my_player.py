@@ -22,7 +22,7 @@ class Player(object):
         self.last_appear_dis = last_appear_dis
 
         # 走过的路
-        self.vis_cell = set()
+        self.vis_point_count = dict()
 
         # 要去哪一个矿区吃金币
         self.target_power_x = None

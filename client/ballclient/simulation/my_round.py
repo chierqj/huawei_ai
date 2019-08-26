@@ -197,12 +197,13 @@ class Round(object):
     def update_vis_set(self):
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
-                player.vis_cell.clear()
+                player.vis_point_count.clear()
                 mLogger.warning(">睡眠，被吃了< [fish: {}; point: ({}, {}); move: {}; dead_weight: {}]".format(
                     player.id, player.x, player.y, player.move, player.dead_weight))
             else:
                 cell_id = mLegStart.get_cell_id(player.x, player.y)
-                player.vis_cell.add(cell_id)
+                num = player.vis_point_count.get(cell_id, 0)
+                player.vis_point_count[cell_id] = num + 1
 
     # 程序入口
     def excute(self, msg):

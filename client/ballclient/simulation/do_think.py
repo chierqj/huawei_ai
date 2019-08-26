@@ -17,19 +17,29 @@ class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
         self.all_enums = None
+        self.answer_point = set()
 
     def init(self):
         pass
 
     # 逼近策略
     def approach_grab_player(self):
-        for k, player in mPlayers.iteritems():
-            if player.sleep == True:
+        for k, grab_player in othPlayers.iteritems():
+            if grab_player.predict_x == None:
                 continue
-            self.eat_power(player)
-            mLogger.info("[逼近] [player: {}; point: ({}, {}); move: {}]".format(
-                player.id, player.x, player.y, player.move
-            ))
+            if grab_player.visiable == False and grab_player.lost_vision_num > 2:
+                continue
+            for k, player in mPlayers.iteritems():
+                if player.sleep == True:
+                    continue
+                dis, move, cell = self.get_min_dis(
+                    player.x, player.y, grab_player.predict_x, grab_player.predict_y)
+                player.move = move
+                mLogger.info("[逼近] [player: {}; point: ({}, {}); move: {}]".format(
+                    player.id, player.x, player.y, player.move
+                ))
+            return True
+        return False
 
     # vis_point是有鱼的位置，不能走
     def get_safe_num(self, grab_next_points, vis_point):
@@ -89,36 +99,35 @@ class DoThink(Action):
         return min_dis, min_move, min_cell
 
     # 敌人的安全位置为0，增员
-    def increase_player(self, grab_player, danger_points):
+    def increase_player(self, grab_player, used_players):
         ret_dis, ret_key, ret_move = None, None, None
-        useful_key = []
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
-            cell = mLegStart.get_cell_id(player.x, player.y)
-            if cell in danger_points:
-                player.move = ""
+            if player.id in used_players:
                 continue
 
             dis, move, cell = self.get_min_dis(
-                player.x, player.y, grab_player.predict_x, grab_player.predict_y, danger_points)
+                player.x, player.y, grab_player.predict_x, grab_player.predict_y)
             if ret_dis == None or dis < ret_dis:
                 ret_dis, ret_key, ret_move = dis, k, move
-            useful_key.append(k)
 
         mLogger.info("开始增员以及吃能量......")
-
         mPlayers[ret_key].move = ret_move
         mLogger.info("[增员] [player: {}; point: ({}, {}); move: {}]".format(
             mPlayers[ret_key].id, mPlayers[ret_key].x, mPlayers[ret_key].y, mPlayers[ret_key].move
         ))
-        for key in useful_key:
-            if key == ret_key:
+
+        eat_power_players = []
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
                 continue
-            self.eat_power(mPlayers[key])
-            mLogger.info("[能量] [player: {}; point: ({}, {}); move: {}]".format(
-                mPlayers[key].id, mPlayers[key].x, mPlayers[key].y, mPlayers[key].move
-            ))
+            if player.id in used_players:
+                continue
+            if k == ret_key:
+                continue
+            eat_power_players.append(player)
+        self.eat_power(eat_power_players)
 
     # 实施抓捕(被抓的鱼，被抓的鱼下一个可以行走的位置，被抓的鱼这一回合的安全位置数目)
     def force_grab(self, grab_player, grab_next_points, limit_safe_num):
@@ -138,43 +147,98 @@ class DoThink(Action):
                 vis_point.add(cell)
 
             flag = True
+            danger_points = set()
+            max_safe_num = None
             for move, go_x, go_y in grab_next_points:
                 new_next = self.get_next_one_points(go_x, go_y, vis_point)
-                safe_num, safe_points, danger_points = self.get_safe_num(
+                safe_num, safe_points, tmp_danger_points = self.get_safe_num(
                     new_next, vis_point)
                 if safe_num > limit_safe_num:
                     flag = False
                     break
+
+                
+                danger_points = danger_points.union(tmp_danger_points)
+                if max_safe_num == None or safe_num > max_safe_num:
+                    max_safe_num = safe_num
             if flag == False:
                 continue
+            # safe_num, safe_points, danger_points = self.get_safe_num(grab_next_points, vis_point)
+            # if safe_num > limit_safe_num:
+            #     continue
+            # max_safe_num = safe_num
 
             sum_dis, action = 0, []
+            sum_url_dis = 0
             for pid, em, ex, ey in enum:
                 cell = mLegStart.get_cell_id(ex, ey)
                 if cell in danger_points:
                     action.append((pid, em, ex, ey))
                     sum_dis += mLegStart.get_short_length(
                         ex, ey, grab_player.predict_x, grab_player.predict_y)
+                    sum_url_dis += (ex - grab_player.predict_x) ** 2 + (ey - grab_player.predict_y) ** 2
 
             if result == None:
                 result = {
-                    'safe_num': safe_num,
+                    'max_safe_num': max_safe_num,
                     'sum_dis': sum_dis,
+                    'sum_url_dis': sum_url_dis,
                     'action': action
                 }
                 continue
-            if safe_num < result['safe_num'] or (safe_num == result['safe_num'] and sum_dis < result['sum_dis']):
+
+            # 安全位置小
+            if max_safe_num < result['max_safe_num']:
                 result = {
-                    'safe_num': safe_num,
+                    'max_safe_num': max_safe_num,
                     'sum_dis': sum_dis,
+                    'sum_url_dis': sum_url_dis,
                     'action': action
                 }
+            elif max_safe_num == result['max_safe_num']:
+                # 安全位置一样但是sumdis小或者sumdis一样但是欧式距离小
+                if sum_dis < result['sum_dis'] or (sum_dis == result['sum_dis'] and sum_url_dis < result['sum_url_dis']):
+                    result = {
+                        'max_safe_num': max_safe_num,
+                        'sum_dis': sum_dis,
+                        'sum_url_dis': sum_url_dis,
+                        'action': action
+                    }
 
         return result
 
+    # 选择一个最优的决策
     def select_best_result(self, results):
-        return results[0]
+        def cmp(it1, it2):
+            if it1['limit_safe_num'] == it2['limit_safe_num']:
+                if it1['init_go_num'] == it2['init_go_num']:
+                    if it1['sum_dis'] == it2['sum_dis']:
+                        if it1['sum_url_dis'] < it2['sum_url_dis']:
+                            return -1
+                        return 1
+                    if it1['sum_dis'] < it2['sum_dis']:
+                        return -1
+                    return 1
+                if it1['init_go_num'] < it2['init_go_num']:
+                    return -1
+                return 1
+            if it1['limit_safe_num'] < it2['limit_safe_num']:
+                return -1
+            return 1
+        results = sorted(results, cmp)
 
+        best_result = results[0]
+
+        if best_result['limit_safe_num'] == 0:
+            used_players = set()
+            for it in best_result['action']:
+                used_players.add(it[0])
+            self.increase_player(best_result['grab_player'], used_players)            
+
+        mLogger.info("[最优] [{}]\n".format(best_result))
+        return best_result
+
+    # 判断是否在(x, y)是否在(px, py)视野当中
     def judge_in_vision(self, px, py, x, y):
         vision = mLegStart.msg['msg_data']['map']['vision']
         if x < px - vision or x > px + vision:
@@ -183,35 +247,69 @@ class DoThink(Action):
             return False
         return True
 
-    def eat_power(self, player):
-        min_dis1, ans_move1 = None, None
-        min_dis2, ans_move2 = None, None
+    # 吃能量
+    def eat_power(self, players):
+        powers = self.mRoundObj.msg['msg_data'].get('power', [])
+        vis_index = set()
+        for power in powers:
+            min_dis, ret_index, ret_move = None, None, None
+            for index, player in enumerate(players):
+                if player.sleep == True:
+                    continue
+                if index in vis_index:
+                    continue
+                dis, move, cell = self.get_min_dis(
+                    player.x, player.y, power['x'], power['y'])
+                if min_dis == None or dis < min_dis:
+                    min_dis, ret_index, ret_move = dis, index, move
+            if ret_index != None:
+                players[ret_index].move = ret_move
+                mLogger.info("[能量] [player: {}; point: ({}, {}); move: {}]".format(
+                    players[ret_index].id, players[ret_index].x, players[ret_index].y, players[ret_index].move
+                ))
+                vis_index.add(ret_index)
+        for index, player in enumerate(players):
+            if index in vis_index:
+                continue
+            self.travel(player)
 
-        for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
-            dis, move, cell = self.get_min_dis(
-                player.x, player.y, power.x, power.y)
+    # 探路巡航
+    def travel(self, player):
+        next_one_points = self.get_next_one_points(player.x, player.y)
+        min_cnt, ret_move = None, None
+        for mv, nx, ny in next_one_points:
+            cell = mLegStart.get_cell_id(nx, ny)
+            cnt = player.vis_point_count.get(cell, 0)
+            if min_cnt == None or cnt < min_cnt:
+                min_cnt, ret_move = cnt, mv
+        player.move = ret_move
 
-            if power.visiable == True:
-                if min_dis1 == None or dis < min_dis1:
-                    min_dis1, ans_move1 = dis, move
-            elif False == self.judge_in_vision(power.x, power.y, player.x, player.y):
-                if min_dis2 == None or dis > min_dis2:
-                    min_dis2, ans_move2 = dis, move
+        mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}]".format(
+            player.id, player.x, player.y, player.move
+        ))
 
-        if ans_move1 != None:
-            player.move = ans_move1
-            return
-        if ans_move2 != None:
-            player.move = ans_move2
-            return
+    # 直接吃，对面无路可走
+    def just_eat_player(self, grab_player):
+        min_dis, min_key, min_move = None, None, None
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            dis, move, cell = self.get_min_dis(player.x, player.y, grab_player.predict_x, grab_player.predict_y)
+            if min_dis == None or dis < min_dis:
+                min_dis, min_key, min_move = dis, k, move
+        mPlayers[min_key].move = move
+    
+        mLogger.info("[直接吃] [player: {}; point: ({}, {}); move: {}]".format(
+            mPlayers[min_key].id, mPlayers[min_key].x, mPlayers[min_key].y, mPlayers[min_key].move
+        ))
 
-        next_one_points = self.get_next_one_points(
-            player.x, player.y, player.vis_cell)
-        if len(next_one_points) == 0:
-            mLogger.warning("[player: {}; point: ({}, {}); 无路可走]".format(
-                player.id, player.x, player.y
-            ))
-        player.move = next_one_points[0][0]
+        players = []
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            if k != min_key:
+                players.append(player)
+        self.eat_power(players)            
 
     # 围捕策略
     def force_grab_player(self):
@@ -243,15 +341,22 @@ class DoThink(Action):
         for k, oth_player in othPlayers.iteritems():
             if oth_player.predict_x == None:
                 mLogger.info(
-                    "[敌人] [player: {} 预判不到位置; 不符合]\n".format(oth_player.id))
+                    "[敌人] [player: {} 预判不到位置; 不符合]".format(oth_player.id))
                 continue
 
             grab_next_points = self.get_next_one_points(
                 oth_player.predict_x, oth_player.predict_y, vis_point)
+            grab_next_points.append(("", oth_player.predict_x, oth_player.predict_y))
 
             mLogger.info("[敌人] [player: {}; point: ({}, {}); grab_next: {}]".format(
                 oth_player.id, oth_player.predict_x, oth_player.predict_y, grab_next_points
             ))
+
+            if len(grab_next_points) == 0:
+                mLogger.info("[结果] [可行位置为0，找个最近的直接吃]")
+                self.just_eat_player(oth_player)
+                return True
+
 
             param = dict()
             flag = self.match_grab(
@@ -263,33 +368,38 @@ class DoThink(Action):
                 continue
 
             limit_safe_num = param['limit_safe_num']
-            if limit_safe_num == 0:
-                mLogger.info("[结果] [安全位置为0，增员或者直接干掉]\n".format(oth_player.id))
-                self.increase_player(oth_player, param['danger_points'])
-                return True
+            # if limit_safe_num == 0:
+            #     mLogger.info("[结果] [安全位置为0，增员或者直接干掉]\n".format(oth_player.id))
+            #     self.increase_player(oth_player, param['danger_points'])
+            #     return True
 
-            ret = self.force_grab(oth_player, grab_next_points, limit_safe_num)
+            ret = self.force_grab(
+                oth_player, grab_next_points, limit_safe_num)
             mLogger.info("[结果] [{}]\n".format(ret))
 
             if ret == None:
                 continue
             success = True
+            ret['init_go_num'] = len(grab_next_points)
+            ret['limit_safe_num'] = limit_safe_num
+            ret['grab_player'] = oth_player
             results.append(ret)
 
         if False == success:
             return False
 
         best_result = self.select_best_result(results)
-        mLogger.info("[最优] [{}]\n".format(best_result))
         ans_move = dict()
         for pid, em, ex, ey in best_result["action"]:
             ans_move[pid] = em
 
+        eat_power_players = []
         for k, player in mPlayers.iteritems():
             if k in ans_move:
                 player.move = ans_move[k]
             else:
-                player.move = self.eat_power(player)
+                eat_power_players.append(player)
+        self.eat_power(eat_power_players)
         return True
 
     def update_predict(self):
@@ -304,6 +414,14 @@ class DoThink(Action):
                 oth_player.id, oth_player.x, oth_player.y, oth_player.predict_x, oth_player.predict_y, oth_player.lost_vision_num
             ))
 
+    def all_eat_or_travel(self):
+        players = []
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            players.append(player)
+        self.eat_power(players)
+
     # 执行入口
     def do_excute(self):
         mLogger.info("开始预判位置......")
@@ -312,7 +430,10 @@ class DoThink(Action):
         if True == self.force_grab_player():
             return
         mLogger.info("围剿失败，开始逼近......")
-        self.approach_grab_player()
+        if True == self.approach_grab_player():
+            return
+        mLogger.info("逼近失败，全员吃能量或者巡航......")
+        self.all_eat_or_travel()
 
 
 mDoThink = DoThink()

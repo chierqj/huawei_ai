@@ -28,6 +28,9 @@ class Action(object):
     # 获取下一步移动的位置，仅判断是不是合法
     def get_next_one_points(self, x, y, vis_point=set()):
         moves = ['up', 'down', 'left', 'right']
+        rd = random.random()
+        if rd <= 0.3:
+            random.shuffle(moves)
         result = []
         for move in moves:
             # 获取move之后真正到达的位置

@@ -47,9 +47,9 @@ class DoBeat(Action):
             self.reward_power(player, move, go_x, go_y)
 
     # 访问过的节点的惩罚评分，防止逛街
-    def punish_vis_cell(self, player, move, px, py):
+    def punish_vis_point(self, player, move, px, py):
         cell_id = mLegStart.get_cell_id(px, py)
-        if cell_id in player.vis_cell:
+        if cell_id in player.vis_point_count:
             nweight = self.weight_moves.get(move, 0)
 
             self.weight_moves[move] = float(
@@ -87,7 +87,7 @@ class DoBeat(Action):
     def punish_weight(self, player, next_one_points):
         for move, go_x, go_y in next_one_points:
             self.punish_player(player, move, go_x, go_y)
-            self.punish_vis_cell(player, move, go_x, go_y)
+            self.punish_vis_point(player, move, go_x, go_y)
 
     def select_best_move(self):
         max_weight, ret_move = None, None
