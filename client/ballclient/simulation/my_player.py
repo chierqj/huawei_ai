@@ -24,23 +24,12 @@ class Player(object):
         # 走过的路
         self.vis_point_count = dict()
 
-        # 要去哪一个矿区吃金币
-        self.target_power_x = None
-        self.target_power_y = None
-
         # 每一时刻的move
         self.move = ""
-
-        # 追击的鱼
-        self.grab_fish = None
 
         # 预测的位置
         self.predict_x = None
         self.predict_y = None
-
-        # 逃跑的位置
-        self.runx = None
-        self.runy = None
 
         # 死亡的weight
         self.dead_weight = None

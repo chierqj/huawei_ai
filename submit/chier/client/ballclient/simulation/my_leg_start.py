@@ -20,6 +20,7 @@ class LegStart(object):
         self.tol_cells = 0
         self.fa = []
         self.graph_weight = dict()
+        self.my_team_force = None
 
     # 更新最短路径的二维字典，u-v的路径是个list
     def update_short_path_dict(self, key1, key2, value):
@@ -378,9 +379,32 @@ class LegStart(object):
         self.tol_cells = 0
         self.fa = []
         self.graph_weight.clear()
+        self.my_team_force = None
         mPlayers.clear()
         othPlayers.clear()
         mLogger.info(self.msg)
+
+    # 创建所有player obj
+    def create_player_obj(self):
+        teams = self.msg['msg_data']['teams']
+        for team in teams:
+            team_id = team['id']
+            force = team['force']
+            if team['id'] == config.team_id:
+                self.my_team_force = team['force']
+                for pid in team['players']:
+                    mPlayers[pid] = Player(
+                        fish_id=pid,
+                        team_id=team_id,
+                        force=force,
+                    )
+            else:
+                for pid in team['players']:
+                    othPlayers[pid] = Player(
+                        fish_id=pid,
+                        team_id=team_id,
+                        force=force,
+                    )
 
     def excute(self, msg):
         # 初始化赋值msg
@@ -398,6 +422,8 @@ class LegStart(object):
         self.init_tunnel_go()
         # 计算地图自身每个点的权重
         self.cal_grath_weight()
+        #
+        self.create_player_obj()
 
 
 mLegStart = LegStart()

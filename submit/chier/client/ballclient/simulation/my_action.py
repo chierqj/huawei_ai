@@ -28,6 +28,9 @@ class Action(object):
     # 获取下一步移动的位置，仅判断是不是合法
     def get_next_one_points(self, x, y, vis_point=set()):
         moves = ['up', 'down', 'left', 'right']
+        rd = random.random()
+        if rd <= 0.3:
+            random.shuffle(moves)
         result = []
         for move in moves:
             # 获取move之后真正到达的位置
@@ -98,18 +101,17 @@ class Action(object):
         return result
 
     # 获取players的所有可能的情况
-    @msimulog()
     def get_all_enums(self, next_one_points):
         result = []
         up = len(next_one_points)
-
+        
         def dfs(dep, enum=[]):
             if dep == up:
                 import copy
                 result.append(copy.deepcopy(enum))
                 return
-            for mv, nx, ny in next_one_points[dep]:
-                dfs(dep + 1, enum + [(mv, nx, ny)])
+            for pid, mv, nx, ny in next_one_points[dep]:
+                dfs(dep + 1, enum + [(pid, mv, nx, ny)])
         dfs(0)
 
         return result
@@ -131,14 +133,14 @@ class Action(object):
             if have_view == False:
                 pre_player.predict_x, pre_player.predict_y = go_x, go_y
 
-        if pre_player.predict_x == None:
-            mLogger.warning("> 预判没有位置 < [player: {}; point: ({}, {})]".format(
-                pre_player.id, pre_player.x, pre_player.y,
-            ))
-        else:
-            mLogger.info(">预判< [player: {}; point: ({}, {}); predict: ({}, {})]".format(
-                pre_player.id, pre_player.x, pre_player.y, pre_player.predict_x, pre_player.predict_y
-            ))
+        # if pre_player.predict_x == None:
+        #     mLogger.warning("> 预判没有位置 < [player: {}; point: ({}, {})]".format(
+        #         pre_player.id, pre_player.x, pre_player.y,
+        #     ))
+        # else:
+        #     mLogger.info(">预判< [player: {}; point: ({}, {}); predict: ({}, {})]".format(
+        #         pre_player.id, pre_player.x, pre_player.y, pre_player.predict_x, pre_player.predict_y
+        #     ))
 
     # 入口
     def excute(self, mRoundObj):
