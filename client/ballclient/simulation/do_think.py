@@ -154,7 +154,8 @@ class DoThink(Action):
             b. 我的鱼到敌人的鱼的总距离
             b. 满足的时候，找出限制走位的鱼，不限制的就不算
         '''
-
+        if len(grab_next_points) == 0:
+            return None
         result = None
         for enum in self.all_enums:
             vis_point = set()
@@ -240,15 +241,20 @@ class DoThink(Action):
         results = sorted(results, cmp)
 
         best_result = results[0]
+        mLogger.info("[最优] [{}]\n".format(best_result))
 
         if best_result['limit_safe_num'] == 0:
             used_player_id = set()
+            ans_move = dict()
             for it in best_result['action']:
                 used_player_id.add(it[0])
+                ans_move[it[0]] = it[1]
             grab_player = othPlayers[best_result['grab_player_key']]
             self.increase_player(grab_player, used_player_id)
+            for k, v, in ans_move.iteritems():
+                mPlayers[k].move = v
 
-        mLogger.info("[最优] [{}]\n".format(best_result))
+            return None
         return best_result
 
     # 判断是否在(x, y)是否在(px, py)视野当中
@@ -284,25 +290,6 @@ class DoThink(Action):
                 ))
 
         return vis_player_id
-
-        # for power in powers:
-        #     min_dis, ret_index, ret_move = None, None, None
-        #     for index, player in enumerate(players):
-        #         if player.sleep == True:
-        #             continue
-        #         if player.id in vis_player_id:
-        #             continue
-        #         dis, move, cell = self.get_min_dis(
-        #             player.x, player.y, power['x'], power['y'])
-        #         if min_dis == None or dis < min_dis:
-        #             min_dis, ret_index, ret_move = dis, index, move
-        #     if ret_index != None:
-        #         players[ret_index].move = ret_move
-        #         mLogger.info("[能量] [player: {}; point: ({}, {}); move: {}]".format(
-        #             players[ret_index].id, players[ret_index].x, players[ret_index].y, players[ret_index].move
-        #         ))
-        #         vis_player_id.add(players[ret_index].id)
-        # return vis_player_id
 
     # 探路巡航
     def travel(self, player):
@@ -366,6 +353,7 @@ class DoThink(Action):
             c. 或者None
         3. 在所有的抓捕动作中，选择一个收益最大的
         '''
+
         vis_point = set()
         next_one_points_ary = []
         for k, player in mPlayers.iteritems():
@@ -415,20 +403,11 @@ class DoThink(Action):
                 continue
 
             limit_safe_num = param['limit_safe_num']
-            # if limit_safe_num == 0:
-            #     mLogger.info("[结果] [安全位置为0，增员或者直接干掉]\n".format(oth_player.id))
-            #     used_players = set()
-            #     for k, player in mPlayers.iteritems():
-            #         if player.sleep == True:
-            #             continue
-            #         cell = mLegStart.get_cell_id(player.x, player.y)
-            #         if cell in param['danger_points']:
-            #             used_players.add(player.id)
-            #     self.increase_player(oth_player, used_players)
-            #     return True
-
             ret = self.force_grab(
                 oth_player, grab_next_points, limit_safe_num)
+
+            if ret == None:
+                ret = self.force_grab(oth_player, param['safe_points'], limit_safe_num)
 
             # 当返回结果为none的时候，先看一下这一回合安全位置是不是0，是的话就原地不动
             if ret == None:
@@ -468,6 +447,8 @@ class DoThink(Action):
             return False
 
         best_result = self.select_best_result(results)
+        if best_result == None:
+            return True
         ans_move = dict()
         for pid, em, ex, ey in best_result["action"]:
             ans_move[pid] = em
