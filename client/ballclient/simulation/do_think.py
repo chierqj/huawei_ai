@@ -18,10 +18,41 @@ class DoThink(Action):
         super(DoThink, self).__init__()
         self.all_enums = None
         self.answer_point = set()
-        self.LIMIT_LOST_VISION = 1
+        self.LIMIT_LOST_VISION = 2
+        self.LIMIT_GRAB_DIS = 5
+        self.HAVE_RET_POINT = set()
 
     def init(self):
         pass
+
+    # 添加访问过得点
+    def add_have_go(self, player):
+        GX, GY = self.mRoundObj.real_go_point(player.x, player.y, player.move)
+        GP = mLegStart.get_cell_id(GX, GY)
+        self.HAVE_RET_POINT.add(GP)
+
+    # 获取下一步移动的位置，仅判断是不是合法
+    def get_next_one_points(self, x, y, vis_point=set()):
+        moves = ['up', 'down', 'left', 'right']
+        rd = random.random()
+        if rd <= 0.3:
+            random.shuffle(moves)
+        result = []
+        for move in moves:
+            # 获取move之后真正到达的位置
+            go_x, go_y = self.mRoundObj.real_go_point(x, y, move)
+            if False == self.mRoundObj.match_border(go_x, go_y):
+                continue
+            if True == self.mRoundObj.match_meteor(go_x, go_y):
+                continue
+            if go_x == x and go_y == y:
+                continue
+            go_cell_id = mLegStart.get_cell_id(go_x, go_y)
+            # vis_point 控制多条鱼尽量不重叠
+            if go_cell_id in vis_point or go_cell_id in self.HAVE_RET_POINT:
+                continue
+            result.append((move, go_x, go_y))
+        return result
 
     # 逼近策略;吃完能量之后used_player_id这些都吃了能量了；剩下的要么逼近要么巡航
     def approach_grab_player(self, used_player_id):
@@ -44,10 +75,11 @@ class DoThink(Action):
                 if min_dis == None or dis < min_dis:
                     min_dis, min_move = dis, move
 
-            if min_dis == None or min_dis > 4:
+            if min_dis == None or min_dis > self.LIMIT_GRAB_DIS:
                 self.travel(player)
             else:
                 player.move = move
+                self.add_have_go(player)
                 mLogger.info("[逼近] [player: {}; point: ({}, {}); move: {}]".format(
                     player.id, player.x, player.y, player.move
                 ))
@@ -284,6 +316,7 @@ class DoThink(Action):
             if min_index != None:
                 vis_power_index.add(index)
                 player.move = min_move
+                self.add_have_go(player)
                 vis_player_id.add(player.id)
                 mLogger.info("[能量] [player: {}; point: ({}, {}); move: {}]".format(
                     player.id, player.x, player.y, player.move
@@ -293,18 +326,34 @@ class DoThink(Action):
 
     # 探路巡航
     def travel(self, player):
-        next_one_points = self.get_next_one_points(player.x, player.y)
-        min_cnt, ret_move = None, None
-        for mv, nx, ny in next_one_points:
-            cell = mLegStart.get_cell_id(nx, ny)
-            cnt = player.vis_point_count.get(cell, 0)
-            if min_cnt == None or cnt < min_cnt:
-                min_cnt, ret_move = cnt, mv
-        player.move = ret_move
+        min_vis_count, ret_x, ret_y = None, None, None
+        for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
+            cell = mLegStart.get_cell_id(power.x, power.y)
+            num = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
+            if min_vis_count == None or num < min_vis_count:
+                min_vis_count, ret_x, ret_y = num, power.x, power.y
 
-        mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}]".format(
-            player.id, player.x, player.y, player.move
-        ))
+        if min_vis_count == None:
+            next_one_points = self.get_next_one_points(player.x, player.y)
+            min_cnt, ret_move = None, None
+            for mv, nx, ny in next_one_points:
+                cell = mLegStart.get_cell_id(nx, ny)
+                cnt = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
+                if min_cnt == None or cnt < min_cnt:
+                    min_cnt, ret_move = cnt, mv
+            player.move = ret_move
+            mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}]".format(
+                player.id, player.x, player.y, player.move
+            ))
+        else:
+            dis, move, cell = self.get_min_dis(
+                player.x, player.y, ret_x, ret_y)
+            player.move = move
+
+            mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}; power: ({}, {})]".format(
+                player.id, player.x, player.y, player.move, ret_x, ret_y
+            ))
+        self.add_have_go(player)
 
     # 直接吃，对面无路可走
     def just_eat_player(self, grab_player):
@@ -354,6 +403,7 @@ class DoThink(Action):
         3. 在所有的抓捕动作中，选择一个收益最大的
         '''
 
+        # 获取我方所有的枚举情况，距离超过5就不枚举了；包括原地不动的情况
         vis_point = set()
         next_one_points_ary = []
         for k, player in mPlayers.iteritems():
@@ -367,11 +417,11 @@ class DoThink(Action):
             next_one_points.append(("", player.x, player.y))
             next_one_points = [(player.id, it[0], it[1], it[2])
                                for it in next_one_points]
-
             next_one_points_ary.append(next_one_points)
 
         self.all_enums = self.get_all_enums(next_one_points_ary)
 
+        # 开始看敌方哪个鱼更可能被抓
         success, results = False, []
         for k, oth_player in othPlayers.iteritems():
             if oth_player.predict_x == None:
@@ -379,6 +429,7 @@ class DoThink(Action):
                     "[敌人] [player: {} 预判不到位置; 不符合]".format(oth_player.id))
                 continue
 
+            # 获取地方这一轮可走位置，包括原地不动
             grab_next_points = self.get_next_one_points(
                 oth_player.predict_x, oth_player.predict_y, vis_point)
             grab_next_points.append(
@@ -388,11 +439,13 @@ class DoThink(Action):
                 oth_player.id, oth_player.predict_x, oth_player.predict_y, grab_next_points
             ))
 
+            # 敌人无路可走就派最近的鱼直接吃它
             if len(grab_next_points) == 0:
                 mLogger.info("[结果] [可行位置为0，找个最近的直接干掉]")
                 self.just_eat_player(oth_player)
                 return True
 
+            # 判断这个鱼能不能被抓，安全位置太多就抓不了
             param = dict()
             flag = self.match_grab(
                 oth_player, grab_next_points, vis_point, param)
@@ -402,12 +455,15 @@ class DoThink(Action):
                 mLogger.info("[结果] [不符合]\n".format(oth_player.id))
                 continue
 
+            # 先根据可走位置，看看能不能限制可走位置
             limit_safe_num = param['limit_safe_num']
             ret = self.force_grab(
                 oth_player, grab_next_points, limit_safe_num)
 
+            # 可走位置限制不了，就限制安全位置
             if ret == None:
-                ret = self.force_grab(oth_player, param['safe_points'], limit_safe_num)
+                ret = self.force_grab(
+                    oth_player, param['safe_points'], limit_safe_num)
 
             # 当返回结果为none的时候，先看一下这一回合安全位置是不是0，是的话就原地不动
             if ret == None:
@@ -446,9 +502,14 @@ class DoThink(Action):
         if False == success:
             return False
 
+        # 选择一个最有可能抓住的敌人
         best_result = self.select_best_result(results)
+
+        # None说明，敌人安全位置为0，我派人增员了，move已经确定，这个时候不用确定了
         if best_result == None:
             return True
+
+        # 确定限制安全位置的鱼的move，其他的鱼要么吃金币，要么巡航
         ans_move = dict()
         for pid, em, ex, ey in best_result["action"]:
             ans_move[pid] = em
@@ -464,6 +525,7 @@ class DoThink(Action):
         self.eat_power_or_travel(eat_power_players)
         return True
 
+    # 更新每个鱼是不是需要预测位置
     def update_predict(self):
         for k, oth_player in othPlayers.iteritems():
             if oth_player.visiable == False:
@@ -476,6 +538,7 @@ class DoThink(Action):
                 oth_player.id, oth_player.x, oth_player.y, oth_player.predict_x, oth_player.predict_y, oth_player.lost_vision_num
             ))
 
+    # 吃能量或者巡航
     def eat_power_or_travel(self, players):
         used_player_id = self.many_players_eat_power(players)
         for player in players:
@@ -485,6 +548,7 @@ class DoThink(Action):
                 continue
             self.travel(player)
 
+    # 所有人去吃能量
     def all_eat_powers(self):
         players = []
         for k, player in mPlayers.iteritems():
@@ -495,6 +559,7 @@ class DoThink(Action):
 
     # 执行入口
     def do_excute(self):
+        self.HAVE_RET_POINT.clear()
         mLogger.info("开始预判位置......")
         self.update_predict()
         mLogger.info("开始进行围剿......")

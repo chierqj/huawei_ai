@@ -104,7 +104,7 @@ class Action(object):
     def get_all_enums(self, next_one_points):
         result = []
         up = len(next_one_points)
-        
+
         def dfs(dep, enum=[]):
             if dep == up:
                 import copy
@@ -119,14 +119,19 @@ class Action(object):
     # 当鱼视野丢失的时候，预判他行走的位置
     def predict_player_point(self, pre_player):
         vision = mLegStart.msg['msg_data']['map']['vision']
-        next_one_points = self.get_next_one_points(pre_player.x, pre_player.y)
+
+        px, py = pre_player.x, pre_player.y
+        if pre_player.predict_x != None:
+            px, py = pre_player.predict_x, pre_player.predict_y
+
+        next_one_points = self.get_next_one_points(px, py)
 
         for move, go_x, go_y in next_one_points:
             have_view = False
             for k, player in mPlayers.iteritems():
-                if go_x < player.x - vision or go_x > player.x + vision:
+                if go_x < px - vision or go_x > px + vision:
                     continue
-                if go_y < player.y - vision or go_y > player.y + vision:
+                if go_y < py - vision or go_y > py + vision:
                     continue
                 have_view = True
                 break
