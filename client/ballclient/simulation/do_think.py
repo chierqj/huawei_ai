@@ -18,9 +18,10 @@ class DoThink(Action):
         super(DoThink, self).__init__()
         self.all_enums = None
         self.answer_point = set()
-        self.LIMIT_LOST_VISION = 2
-        self.LIMIT_GRAB_DIS = 5
-        self.HAVE_RET_POINT = set()
+        self.LIMIT_LOST_VISION = 2 # 小于等于这个数字，才算能抓
+        self.LIMIT_GRAB_DIS = 5 # 小于这个数字，才逼近
+        self.RANDOM_TRAVEL = 0.3 # 随机数超过这个才开始吃金币，增加随机率
+        self.LIMIT_ENUM = 2 # 四个方位最小距离小于等于这个，才算枚举
 
     def init(self):
         pass
@@ -191,9 +192,20 @@ class DoThink(Action):
         result = None
         for enum in self.all_enums:
             vis_point = set()
+
+            flag = True
             for pid, em, ex, ey in enum:
                 cell = mLegStart.get_cell_id(ex, ey)
                 vis_point.add(cell)
+                for pid1, em1, ex1, ey1 in enum:
+                    if pid == pid1:
+                        continue
+                    if ex == ex1 and ey == ey1:
+                        flag = False
+                        break
+            if flag == False:
+                continue
+
 
             flag = True
             danger_points = set()
@@ -327,11 +339,14 @@ class DoThink(Action):
     # 探路巡航
     def travel(self, player):
         min_vis_count, ret_x, ret_y = None, None, None
-        for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
-            cell = mLegStart.get_cell_id(power.x, power.y)
-            num = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
-            if min_vis_count == None or num < min_vis_count:
-                min_vis_count, ret_x, ret_y = num, power.x, power.y
+
+        rd = random.random()
+        if rd > self.RANDOM_TRAVEL:
+            for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
+                cell = mLegStart.get_cell_id(power.x, power.y)
+                num = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
+                if min_vis_count == None or num < min_vis_count:
+                    min_vis_count, ret_x, ret_y = num, power.x, power.y
 
         if min_vis_count == None:
             next_one_points = self.get_next_one_points(player.x, player.y)
@@ -388,7 +403,7 @@ class DoThink(Action):
                 continue
             dis = mLegStart.get_short_length(
                 player.x, player.y, oth_player.predict_x, oth_player.predict_y)
-            if dis < 5:
+            if dis <= self.LIMIT_ENUM:
                 return True
         return False
 
@@ -470,11 +485,13 @@ class DoThink(Action):
                 if limit_safe_num == 0:
                     success = True
                     sum_dis, sum_url_dis, action = 0, 0, []
+                    vis_action = set()
                     for k, player in mPlayers.iteritems():
                         if player.sleep == True:
                             continue
                         cell = mLegStart.get_cell_id(player.x, player.y)
-                        if cell in param['danger_points']:
+                        if cell in param['danger_points'] and cell not in vis_action:
+                            vis_action.add(cell)
                             action.append((player.id, "", player.x, player.y))
                             sum_dis += mLegStart.get_short_length(
                                 player.x, player.y, oth_player.predict_x, oth_player.predict_y)

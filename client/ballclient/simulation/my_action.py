@@ -15,6 +15,7 @@ class Action(object):
         self.mRoundObj = ""
         self.dinger_dirs = [(0, -1), (-1, 0), (1, 0), (0, 1), (0, 0)]
         self.weight_moves = dict()
+        self.HAVE_RET_POINT = set()
 
     # 打印详细log
     def record_detial(self, player):
