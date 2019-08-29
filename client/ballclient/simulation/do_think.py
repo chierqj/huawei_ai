@@ -17,20 +17,13 @@ class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
         self.all_enums = None
-        self.answer_point = set()
         self.LIMIT_LOST_VISION = 2 # 小于等于这个数字，才算能抓
-        self.LIMIT_GRAB_DIS = 5 # 小于这个数字，才逼近
-        self.RANDOM_TRAVEL = 0.3 # 随机数超过这个才开始吃金币，增加随机率
+        self.LIMIT_GRAB_DIS = 7 # 小于这个数字，才逼近
         self.LIMIT_ENUM = 2 # 四个方位最小距离小于等于这个，才算枚举
 
     def init(self):
-        pass
-
-    # 添加访问过得点
-    def add_have_go(self, player):
-        GX, GY = self.mRoundObj.real_go_point(player.x, player.y, player.move)
-        GP = mLegStart.get_cell_id(GX, GY)
-        self.HAVE_RET_POINT.add(GP)
+        self.all_enums = None
+        self.HAVE_RET_POINT.clear()
 
     # 获取下一步移动的位置，仅判断是不是合法
     def get_next_one_points(self, x, y, vis_point=set()):
@@ -301,15 +294,6 @@ class DoThink(Action):
             return None
         return best_result
 
-    # 判断是否在(x, y)是否在(px, py)视野当中
-    def judge_in_vision(self, px, py, x, y):
-        vision = mLegStart.msg['msg_data']['map']['vision']
-        if x < px - vision or x > px + vision:
-            return False
-        if y < py - vision or y > py + vision:
-            return False
-        return True
-
     # 多个人吃能量
     def many_players_eat_power(self, players):
         powers = self.mRoundObj.msg['msg_data'].get('power', [])
@@ -335,40 +319,6 @@ class DoThink(Action):
                 ))
 
         return vis_player_id
-
-    # 探路巡航
-    def travel(self, player):
-        min_vis_count, ret_x, ret_y = None, None, None
-
-        rd = random.random()
-        if rd > self.RANDOM_TRAVEL:
-            for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
-                cell = mLegStart.get_cell_id(power.x, power.y)
-                num = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
-                if min_vis_count == None or num < min_vis_count:
-                    min_vis_count, ret_x, ret_y = num, power.x, power.y
-
-        if min_vis_count == None:
-            next_one_points = self.get_next_one_points(player.x, player.y)
-            min_cnt, ret_move = None, None
-            for mv, nx, ny in next_one_points:
-                cell = mLegStart.get_cell_id(nx, ny)
-                cnt = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
-                if min_cnt == None or cnt < min_cnt:
-                    min_cnt, ret_move = cnt, mv
-            player.move = ret_move
-            mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}]".format(
-                player.id, player.x, player.y, player.move
-            ))
-        else:
-            dis, move, cell = self.get_min_dis(
-                player.x, player.y, ret_x, ret_y)
-            player.move = move
-
-            mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}; power: ({}, {})]".format(
-                player.id, player.x, player.y, player.move, ret_x, ret_y
-            ))
-        self.add_have_go(player)
 
     # 直接吃，对面无路可走
     def just_eat_player(self, grab_player):

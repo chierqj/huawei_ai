@@ -13,8 +13,10 @@ import math
 class Action(object):
     def __init__(self):
         self.mRoundObj = ""
-        self.dinger_dirs = [(0, -1), (-1, 0), (1, 0), (0, 1), (0, 0)]
         self.weight_moves = dict()
+        self.HAVE_RET_POINT = set()
+        self.RANDOM_TRAVEL = 0.3  # 随机数超过这个才开始吃金币，增加随机率
+
 
     # 打印详细log
     def record_detial(self, player):
@@ -24,6 +26,15 @@ class Action(object):
         mLogger.info(self.weight_moves)
         mLogger.info('[fish: {}, from: ({}, {}), move: {}]'.format(
             player.id, player.x, player.y, player.move))
+
+    # 判断是否在(x, y)是否在(px, py)视野当中
+    def judge_in_vision(self, px, py, x, y):
+        vision = mLegStart.msg['msg_data']['map']['vision']
+        if x < px - vision or x > px + vision:
+            return False
+        if y < py - vision or y > py + vision:
+            return False
+        return True
 
     # 获取下一步移动的位置，仅判断是不是合法
     def get_next_one_points(self, x, y, vis_point=set()):
@@ -104,7 +115,7 @@ class Action(object):
     def get_all_enums(self, next_one_points):
         result = []
         up = len(next_one_points)
-        
+
         def dfs(dep, enum=[]):
             if dep == up:
                 import copy
@@ -119,14 +130,19 @@ class Action(object):
     # 当鱼视野丢失的时候，预判他行走的位置
     def predict_player_point(self, pre_player):
         vision = mLegStart.msg['msg_data']['map']['vision']
-        next_one_points = self.get_next_one_points(pre_player.x, pre_player.y)
+
+        px, py = pre_player.x, pre_player.y
+        if pre_player.predict_x != None:
+            px, py = pre_player.predict_x, pre_player.predict_y
+
+        next_one_points = self.get_next_one_points(px, py)
 
         for move, go_x, go_y in next_one_points:
             have_view = False
             for k, player in mPlayers.iteritems():
-                if go_x < player.x - vision or go_x > player.x + vision:
+                if go_x < px - vision or go_x > px + vision:
                     continue
-                if go_y < player.y - vision or go_y > player.y + vision:
+                if go_y < py - vision or go_y > py + vision:
                     continue
                 have_view = True
                 break
@@ -141,6 +157,46 @@ class Action(object):
         #     mLogger.info(">预判< [player: {}; point: ({}, {}); predict: ({}, {})]".format(
         #         pre_player.id, pre_player.x, pre_player.y, pre_player.predict_x, pre_player.predict_y
         #     ))
+
+   # 添加访问过得点
+    def add_have_go(self, player):
+        GX, GY = self.mRoundObj.real_go_point(player.x, player.y, player.move)
+        GP = mLegStart.get_cell_id(GX, GY)
+        self.HAVE_RET_POINT.add(GP)
+
+    # 探路巡航
+    def travel(self, player):
+        min_vis_count, ret_x, ret_y = None, None, None
+
+        rd = random.random()
+        if rd > self.RANDOM_TRAVEL:
+            for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
+                cell = mLegStart.get_cell_id(power.x, power.y)
+                num = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
+                if min_vis_count == None or num < min_vis_count:
+                    min_vis_count, ret_x, ret_y = num, power.x, power.y
+
+        if min_vis_count == None:
+            next_one_points = self.get_next_one_points(player.x, player.y)
+            min_cnt, ret_move = None, None
+            for mv, nx, ny in next_one_points:
+                cell = mLegStart.get_cell_id(nx, ny)
+                cnt = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
+                if min_cnt == None or cnt < min_cnt:
+                    min_cnt, ret_move = cnt, mv
+            player.move = ret_move
+            mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}]".format(
+                player.id, player.x, player.y, player.move
+            ))
+        else:
+            dis, move, cell = self.get_min_dis(
+                player.x, player.y, ret_x, ret_y)
+            player.move = move
+
+            mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}; power: ({}, {})]".format(
+                player.id, player.x, player.y, player.move, ret_x, ret_y
+            ))
+        self.add_have_go(player)
 
     # 入口
     def excute(self, mRoundObj):

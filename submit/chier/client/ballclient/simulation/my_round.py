@@ -24,6 +24,14 @@ class Round(object):
         self.neighbar_power = None
         self.my_alive_player_num = 0
         self.limit_dead_weight = -1.0
+        self.VIS_POWER_COUNT = dict()
+        self.mode = None
+
+    def init(self):
+        self.POWER_WAIT_SET.clear()
+        self.neighbar_power.clear()
+        self.VIS_POWER_COUNT.clear()
+        self.mode = None
 
     # 暴露给service使用的，获取最终结果
     def get_result(self):
@@ -95,10 +103,9 @@ class Round(object):
 
         # 调用函数获取action
         action = []
-        if self.msg['msg_data']['mode'] != mLegStart.my_team_force:
+        if self.mode != mLegStart.my_team_force:
             action = mDoBeat.excute(self)
         else:
-            # action = mDoBeat.excute(self)
             action = mDoThink.excute(self)
 
         self.result['msg_data']['actions'] = action
@@ -112,6 +119,10 @@ class Round(object):
             width = mLegStart.msg['msg_data']['map']['width']
             height = mLegStart.msg['msg_data']['map']['height']
             self.neighbar_power = [[0] * width for _ in range(height)]
+
+        if self.mode == None or self.mode != self.msg['msg_data']['mode']:
+            self.VIS_POWER_COUNT.clear()
+        self.mode = self.msg['msg_data']['mode']
 
     # 更新players状态
     def initialize_players(self):
@@ -151,6 +162,9 @@ class Round(object):
                     visiable=True
                 )
                 self.my_alive_player_num += 1
+                cell = mLegStart.get_cell_id(player['x'], player['y'])
+                num = self.VIS_POWER_COUNT.get(cell, 0)
+                self.VIS_POWER_COUNT[cell] = num + 1
             else:
                 othPlayers[pid].assign(
                     last_appear_dis=0,

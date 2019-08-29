@@ -27,6 +27,12 @@ class Round(object):
         self.VIS_POWER_COUNT = dict()
         self.mode = None
 
+    def init(self):
+        self.POWER_WAIT_SET.clear()
+        self.neighbar_power.clear()
+        self.VIS_POWER_COUNT.clear()
+        self.mode = None
+
     # 暴露给service使用的，获取最终结果
     def get_result(self):
         return self.result
