@@ -17,7 +17,6 @@ class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
         self.all_enums = None
-        self.LIMIT_LOST_VISION = 2 # 小于等于这个数字，才算能抓
         self.LIMIT_GRAB_DIS = 7 # 小于这个数字，才逼近
         self.LIMIT_ENUM = 2 # 四个方位最小距离小于等于这个，才算枚举
 
@@ -491,19 +490,6 @@ class DoThink(Action):
                 eat_power_players.append(player)
         self.eat_power_or_travel(eat_power_players)
         return True
-
-    # 更新每个鱼是不是需要预测位置
-    def update_predict(self):
-        for k, oth_player in othPlayers.iteritems():
-            if oth_player.visiable == False:
-                self.predict_player_point(oth_player)
-                oth_player.lost_vision_num += 1
-            else:
-                oth_player.predict_x, oth_player.predict_y = oth_player.x, oth_player.y,
-                oth_player.lost_vision_num = 0
-            mLogger.info("[player: {}; point: ({}, {}); predict: ({}, {}); lost_vision_num: {}]".format(
-                oth_player.id, oth_player.x, oth_player.y, oth_player.predict_x, oth_player.predict_y, oth_player.lost_vision_num
-            ))
 
     # 吃能量或者巡航
     def eat_power_or_travel(self, players):
