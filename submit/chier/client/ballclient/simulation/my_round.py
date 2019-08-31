@@ -29,7 +29,7 @@ class Round(object):
 
     def init(self):
         self.POWER_WAIT_SET.clear()
-        self.neighbar_power.clear()
+        self.neighbar_power = None
         self.VIS_POWER_COUNT.clear()
         self.mode = None
 

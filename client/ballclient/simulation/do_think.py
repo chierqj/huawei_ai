@@ -293,32 +293,6 @@ class DoThink(Action):
             return None
         return best_result
 
-    # 多个人吃能量
-    def many_players_eat_power(self, players):
-        powers = self.mRoundObj.msg['msg_data'].get('power', [])
-        vis_player_id = set()
-
-        for player in players:
-            vis_power_index = set()
-            min_dis, min_move, min_index = None, None, None
-            for index, power in enumerate(powers):
-                if index in vis_power_index:
-                    continue
-                dis, move, cell = self.get_min_dis(
-                    player.x, player.y, power['x'], power['y'])
-                if min_dis == None or dis < min_dis:
-                    min_dis, min_move, min_index = dis, move, index
-            if min_index != None:
-                vis_power_index.add(index)
-                player.move = min_move
-                self.add_have_go(player)
-                vis_player_id.add(player.id)
-                mLogger.info("[能量] [player: {}; point: ({}, {}); move: {}]".format(
-                    player.id, player.x, player.y, player.move
-                ))
-
-        return vis_player_id
-
     # 直接吃，对面无路可走
     def just_eat_player(self, grab_player):
         min_dis, min_key, min_move = None, None, None
@@ -490,16 +464,6 @@ class DoThink(Action):
                 eat_power_players.append(player)
         self.eat_power_or_travel(eat_power_players)
         return True
-
-    # 吃能量或者巡航
-    def eat_power_or_travel(self, players):
-        used_player_id = self.many_players_eat_power(players)
-        for player in players:
-            if player.sleep == True:
-                continue
-            if player.id in used_player_id:
-                continue
-            self.travel(player)
 
     # 所有人去吃能量
     def all_eat_powers(self):

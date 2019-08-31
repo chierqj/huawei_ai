@@ -18,35 +18,82 @@ class DoBeat(Action):
     def init(self):
         self.HAVE_RET_POINT.clear()
 
-    def match_grab(self, player):
+    def match_escape(self, player):
         for k, oth_player in othPlayers.iteritems():
             if oth_player.predict_x == None:
                 continue
             if oth_player.visiable == False and oth_player.lost_vision_num > self.LIMIT_LOST_VISION:
                 continue
-            if self.judge_in_vision(oth_player.predict_x, oth_player.predict_y, player.x, player.y):
+            dis = mLegStart.get_short_length(
+                oth_player.predict_x, oth_player.predict_y, player.x, player.y)
+            if dis <= 5:
                 return True
         return False
 
     def escape(self, player):
-        sum_force = []
-        for k, oth_player in othPlayers.iteritems():
-            if oth_player.predict_x == None:
-                continue
-            if oth_player.visiable == False and oth_player.lost_vision_num > self.LIMIT_LOST_VISION:
-                continue
-            F = ()
+        ans_move = ""
 
+        def bfs():
+            import Queue
+            q = Queue.Queue()
+            vis = set()
+
+            cell = mLegStart.get_cell_id(player.x, player.y)
+            q.put((0, "", player.x, player.y))
+            vis.add(cell)
+
+            def judge_enemy(x, y, c_step):
+                for k, oth_player in othPlayers.iteritems():
+                    if oth_player.predict_x == None:
+                        continue
+                    if oth_player.visiable == False and oth_player.lost_vision_num > self.LIMIT_LOST_VISION:
+                        continue
+                    dis = mLegStart.get_short_length(
+                        oth_player.predict_x, oth_player.predict_y, x, y)
+                    if dis <= c_step:
+                        return False
+                return True
+
+            while False == q.empty():
+                step, move, ux, uy = q.get()
+                player.move = move
+                next_one_points = self.get_next_one_points(ux, uy)
+
+                for mv, nx, ny in next_one_points:
+                    v_cell = mLegStart.get_cell_id(nx, ny)
+                    if v_cell in vis:
+                        continue
+                    if False == self.judge_in_vision(player.x, player.y, nx, ny):
+                        continue
+                    if step == 0:
+                        move = mv
+
+                    if judge_enemy(nx, ny, step + 1) == False:
+                        continue
+
+                    vis.add(v_cell)
+                    q.put((step+1, move, nx, ny))
+        bfs()
+        # player.move = ans_move
 
     def do_excute(self):
         self.update_predict()
+        players = []
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
-            if self.match_grab(player) == True:
+
+            # round_id = self.mRoundObj.msg['msg_data']['round_id']
+            # if round_id > 145 and round_id < 150:
+            #     player.move = ""
+            #     continue
+
+            if self.match_escape(player) == True:
                 self.escape(player)
                 continue
-            self.travel(player)
+            players.append(player)
+            # self.travel(player)
+        self.eat_power_or_travel(players)
 
     # # 能量值奖励评分
     # def reward_power(self, player, move, px, py):
@@ -135,15 +182,19 @@ class DoBeat(Action):
 
     # # 入口调用
     # def do_excute(self):
+    #     self.update_predict()
     #     vis_point = set()
     #     for k, player in mPlayers.iteritems():
     #         if player.sleep == True:
     #             continue
-    #         # round_id = self.mRoundObj.msg['msg_data']['round_id']
-    #         # if round_id > 145 and round_id <= 150:
-    #         #     player.move = ""
-    #         #     self.record_detial(player)
+    #         # if False == self.match_escape(player):
+    #         #     self.travel(player)
     #         #     continue
+    #         round_id = self.mRoundObj.msg['msg_data']['round_id']
+    #         if round_id > 145 and round_id <= 150:
+    #             player.move = ""
+    #             self.record_detial(player)
+    #             continue
 
     #         next_one_points = self.get_next_one_points(
     #             player.x, player.y, vis_point)

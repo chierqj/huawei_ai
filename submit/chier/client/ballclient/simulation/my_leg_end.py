@@ -1,6 +1,7 @@
 # coding: utf-8
 
 from ballclient.simulation.my_player import mPlayers, othPlayers
+from ballclient.utils.logger import mLogger
 
 
 class LegEnd(object):
@@ -28,7 +29,7 @@ class LegEnd(object):
         #     self.catch_run, self.not_catch_run))
         # print(">预判视野丢失< [总计: {}; 正确: {}]".format(
         #     self.tol_predict, self.catch_predict))
-
+        mLogger.info(self.tolPoint)
         self.catch_run = 0
         self.not_catch_run = 0
         self.tol_predict = 0

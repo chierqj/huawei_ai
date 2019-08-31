@@ -15,9 +15,8 @@ class Action(object):
         self.mRoundObj = ""
         self.weight_moves = dict()
         self.HAVE_RET_POINT = set()
-        self.RANDOM_TRAVEL = 0.3  # 随机数超过这个才开始吃金币，增加随机率
+        self.RANDOM_TRAVEL = 0.5  # 随机数超过这个才开始吃金币，增加随机率
         self.LIMIT_LOST_VISION = 2  # 小于等于这个数字，才算能抓
-
 
     # 打印详细log
     def record_detial(self, player):
@@ -27,6 +26,25 @@ class Action(object):
         mLogger.info(self.weight_moves)
         mLogger.info('[fish: {}, from: ({}, {}), move: {}]'.format(
             player.id, player.x, player.y, player.move))
+
+    # 获取一个鱼四个方向离目标点最近的dis, move, cell
+    def get_min_dis(self, x, y, tx, ty, vis_point=set()):
+        next_one_points = self.get_next_one_points(x, y, vis_point)
+        min_dis, min_move, min_cell, min_url_dis = None, None, None, None
+        for move, go_x, go_y in next_one_points:
+            dis = mLegStart.get_short_length(go_x, go_y, tx, ty)
+            url_dis = (go_x - tx) ** 2 + (go_y - ty) ** 2
+            if min_dis == None or dis < min_dis or (dis == min_dis and url_dis < min_url_dis):
+                min_dis, min_move, min_url_dis = dis, move, url_dis
+                cell_id = mLegStart.get_cell_id(go_x, go_y)
+                min_cell = cell_id
+
+        if min_dis == None:
+            mLogger.warning("[player: {}; point: ({}, {})] 无路可走".format(
+                player.id, player.x, player.y))
+            return -1, "", -1
+
+        return min_dis, min_move, min_cell
 
     # 判断是否在(x, y)是否在(px, py)视野当中
     def judge_in_vision(self, px, py, x, y):
@@ -41,7 +59,7 @@ class Action(object):
     def get_next_one_points(self, x, y, vis_point=set()):
         moves = ['up', 'down', 'left', 'right']
         rd = random.random()
-        if rd <= 0.3:
+        if rd <= 0.9:
             random.shuffle(moves)
         result = []
         for move in moves:
@@ -211,6 +229,77 @@ class Action(object):
             mLogger.info("[player: {}; point: ({}, {}); predict: ({}, {}); lost_vision_num: {}]".format(
                 oth_player.id, oth_player.x, oth_player.y, oth_player.predict_x, oth_player.predict_y, oth_player.lost_vision_num
             ))
+
+    # vis_point是有鱼的位置，不能走
+    def get_safe_num(self, grab_next_points, vis_point):
+        safe_num, safe_points = len(grab_next_points), []
+        danger_points = set()
+        for mv, nx, ny in grab_next_points:
+            flag = True
+            for cell in vis_point:
+                x, y = mLegStart.get_x_y(cell)
+                dis1 = mLegStart.get_short_length(x, y, nx, ny)
+                dis2 = mLegStart.get_short_length(nx, ny, x, y)
+                up = 1
+                if mv == "":
+                    up = 2
+                if dis1 <= up and dis2 <= up:
+                    safe_num -= 1
+                    danger_points.add(cell)
+                    flag = False
+                    break
+            if True == flag:
+                safe_points.append((mv, nx, ny))
+
+        return safe_num, safe_points, danger_points
+
+    # 吃能量或者巡航
+    def eat_power_or_travel(self, players):
+        used_player_id = self.many_players_eat_power(players)
+        for player in players:
+            if player.sleep == True:
+                continue
+            if player.id in used_player_id:
+                continue
+            self.travel(player)
+
+    # 多个人吃能量
+    def many_players_eat_power(self, players):
+        powers = self.mRoundObj.msg['msg_data'].get('power', [])
+        vis_player_id = set()
+
+        for player in players:
+            vis_power_index = set()
+            min_dis, min_move, min_index = None, None, None
+            for index, power in enumerate(powers):
+                if index in vis_power_index:
+                    continue
+
+                near = None
+                for i in vis_power_index:
+                    d = mLegStart.get_short_length(
+                        powers[i]['x'], players[i]['y'])
+                    if near == None or d < near:
+                        near = d
+
+                dis, move, cell = self.get_min_dis(
+                    player.x, player.y, power['x'], power['y'])
+
+                if near != None and dis > d:
+                    continue
+
+                if min_dis == None or dis < min_dis:
+                    min_dis, min_move, min_index = dis, move, index
+
+            if min_index != None:
+                vis_power_index.add(index)
+                player.move = min_move
+                self.add_have_go(player)
+                vis_player_id.add(player.id)
+                mLogger.info("[能量] [player: {}; point: ({}, {}); move: {}]".format(
+                    player.id, player.x, player.y, player.move
+                ))
+        return vis_player_id
 
     # 入口
     def excute(self, mRoundObj):
