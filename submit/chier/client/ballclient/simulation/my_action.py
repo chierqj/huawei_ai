@@ -15,7 +15,7 @@ class Action(object):
         self.mRoundObj = ""
         self.weight_moves = dict()
         self.HAVE_RET_POINT = set()
-        self.RANDOM_TRAVEL = 0.5  # 随机数超过这个才开始吃金币，增加随机率
+        self.RANDOM_TRAVEL = 0.2  # 随机数超过这个才开始吃金币，增加随机率
         self.LIMIT_LOST_VISION = 2  # 小于等于这个数字，才算能抓
 
     # 打印详细log
@@ -24,15 +24,16 @@ class Action(object):
             return
 
         mLogger.info(self.weight_moves)
-        mLogger.info('[fish: {}, from: ({}, {}), move: {}]'.format(
+        mLogger.info('[player: {}, point: ({}, {}), move: {}]'.format(
             player.id, player.x, player.y, player.move))
 
     # 获取一个鱼四个方向离目标点最近的dis, move, cell
     def get_min_dis(self, x, y, tx, ty, vis_point=set()):
         next_one_points = self.get_next_one_points(x, y, vis_point)
+        next_one_points.append(("", x, y))
         min_dis, min_move, min_cell, min_url_dis = None, None, None, None
         for move, go_x, go_y in next_one_points:
-            dis = mLegStart.get_short_length(go_x, go_y, tx, ty)
+            dis = mLegStart.get_short_length(go_x, go_y, tx, ty) + 1
             url_dis = (go_x - tx) ** 2 + (go_y - ty) ** 2
             if min_dis == None or dis < min_dis or (dis == min_dis and url_dis < min_url_dis):
                 min_dis, min_move, min_url_dis = dis, move, url_dis
@@ -209,13 +210,13 @@ class Action(object):
             ))
         else:
             dis, move, cell = self.get_min_dis(
-                player.x, player.y, ret_x, ret_y)
+                player.x, player.y, ret_x, ret_y, self.HAVE_RET_POINT)
             player.move = move
 
             mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}; power: ({}, {})]".format(
                 player.id, player.x, player.y, player.move, ret_x, ret_y
             ))
-        self.add_have_go(player)
+        # self.add_have_go(player)
 
     # 更新每个鱼是不是需要预测位置
     def update_predict(self):
@@ -283,7 +284,7 @@ class Action(object):
                         near = d
 
                 dis, move, cell = self.get_min_dis(
-                    player.x, player.y, power['x'], power['y'])
+                    player.x, player.y, power['x'], power['y'], self.HAVE_RET_POINT)
 
                 if near != None and dis > d:
                     continue
@@ -294,7 +295,7 @@ class Action(object):
             if min_index != None:
                 vis_power_index.add(index)
                 player.move = min_move
-                self.add_have_go(player)
+                # self.add_have_go(player)
                 vis_player_id.add(player.id)
                 mLogger.info("[能量] [player: {}; point: ({}, {}); move: {}]".format(
                     player.id, player.x, player.y, player.move

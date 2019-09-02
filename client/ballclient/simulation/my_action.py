@@ -15,7 +15,7 @@ class Action(object):
         self.mRoundObj = ""
         self.weight_moves = dict()
         self.HAVE_RET_POINT = set()
-        self.RANDOM_TRAVEL = 0.5  # 随机数超过这个才开始吃金币，增加随机率
+        self.RANDOM_TRAVEL = 0.2  # 随机数超过这个才开始吃金币，增加随机率
         self.LIMIT_LOST_VISION = 2  # 小于等于这个数字，才算能抓
 
     # 打印详细log
@@ -36,6 +36,25 @@ class Action(object):
             dis = mLegStart.get_short_length(go_x, go_y, tx, ty) + 1
             url_dis = (go_x - tx) ** 2 + (go_y - ty) ** 2
             if min_dis == None or dis < min_dis or (dis == min_dis and url_dis < min_url_dis):
+                min_dis, min_move, min_url_dis = dis, move, url_dis
+                cell_id = mLegStart.get_cell_id(go_x, go_y)
+                min_cell = cell_id
+
+        if min_dis == None:
+            mLogger.warning("[player: {}; point: ({}, {})] 无路可走".format(
+                player.id, player.x, player.y))
+            return -1, "", -1
+
+        return min_dis, min_move, min_cell
+    
+    # 获取一个鱼四个方向离目标点最远的dis, move, cell
+    def get_max_dis(self, x, y, tx, ty, vis_point=set()):
+        next_one_points = self.get_next_one_points(x, y, vis_point)
+        min_dis, min_move, min_cell, min_url_dis = None, None, None, None
+        for move, go_x, go_y in next_one_points:
+            dis = mLegStart.get_short_length(go_x, go_y, tx, ty) + 1
+            url_dis = (go_x - tx) ** 2 + (go_y - ty) ** 2
+            if min_dis == None or dis > min_dis or (dis == min_dis and url_dis > min_url_dis):
                 min_dis, min_move, min_url_dis = dis, move, url_dis
                 cell_id = mLegStart.get_cell_id(go_x, go_y)
                 min_cell = cell_id
@@ -178,7 +197,7 @@ class Action(object):
         #         pre_player.id, pre_player.x, pre_player.y, pre_player.predict_x, pre_player.predict_y
         #     ))
 
-   # 添加访问过得点
+    # 添加访问过得点
     def add_have_go(self, player):
         GX, GY = self.mRoundObj.real_go_point(player.x, player.y, player.move)
         GP = mLegStart.get_cell_id(GX, GY)
@@ -208,15 +227,25 @@ class Action(object):
             mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}]".format(
                 player.id, player.x, player.y, player.move
             ))
+
+            for k, p in mPlayers.iteritems():
+                if p.sleep == True:
+                    continue
+                if p.id == player.id:
+                    continue
+                if self.judge_in_vision(player.x, player.y, p.x, p.y):
+                    dis, move, cell = self.get_min_dis(player.x, player.y, p.x, p.y)
+                    
+
         else:
             dis, move, cell = self.get_min_dis(
-                player.x, player.y, ret_x, ret_y)
+                player.x, player.y, ret_x, ret_y, self.HAVE_RET_POINT)
             player.move = move
 
             mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}; power: ({}, {})]".format(
                 player.id, player.x, player.y, player.move, ret_x, ret_y
             ))
-        self.add_have_go(player)
+        # self.add_have_go(player)
 
     # 更新每个鱼是不是需要预测位置
     def update_predict(self):
@@ -284,7 +313,7 @@ class Action(object):
                         near = d
 
                 dis, move, cell = self.get_min_dis(
-                    player.x, player.y, power['x'], power['y'])
+                    player.x, player.y, power['x'], power['y'], self.HAVE_RET_POINT)
 
                 if near != None and dis > d:
                     continue
@@ -295,7 +324,7 @@ class Action(object):
             if min_index != None:
                 vis_power_index.add(index)
                 player.move = min_move
-                self.add_have_go(player)
+                # self.add_have_go(player)
                 vis_player_id.add(player.id)
                 mLogger.info("[能量] [player: {}; point: ({}, {}); move: {}]".format(
                     player.id, player.x, player.y, player.move
