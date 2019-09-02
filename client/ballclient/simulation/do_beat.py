@@ -63,8 +63,8 @@ class DoBeat(Action):
                     v_cell = mLegStart.get_cell_id(nx, ny)
                     if v_cell in vis:
                         continue
-                    if False == self.judge_in_vision(player.x, player.y, nx, ny):
-                        continue
+                    # if False == self.judge_in_vision(player.x, player.y, nx, ny):
+                    #     continue
                     if step == 0:
                         move = mv
 

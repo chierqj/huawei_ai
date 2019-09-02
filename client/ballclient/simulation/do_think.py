@@ -17,12 +17,166 @@ class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
         self.all_enums = None
-        self.LIMIT_GRAB_DIS = 7 # 小于这个数字，才逼近
-        self.LIMIT_ENUM = 2 # 四个方位最小距离小于等于这个，才算枚举
+        self.LIMIT_GRAB_DIS = 7  # 小于这个数字，才逼近
+        self.LIMIT_ENUM = 2  # 四个方位最小距离小于等于这个，才算枚举
+        self.LIMIT_GRAB_STEP = 20
+        self.grab_player = None
 
     def init(self):
         self.all_enums = None
         self.HAVE_RET_POINT.clear()
+
+    # 确定要抓的鱼
+
+    def confirm_grab_player(self):
+        if self.grab_player != None and self.grab_player.lost_vision_num < self.LIMIT_LOST_VISION:
+            return True
+        ret_key = None
+        for k, player in othPlayers.iteritems():
+            if player.visiable == True:
+                self.grab_player = player
+                return True
+            if player.lost_vision_num < self.LIMIT_LOST_VISION:
+                ret_key = k
+        if ret_key == None:
+            self.grab_player = None
+            return False
+        self.grab_player = othPlayers[ret_key]
+        return True
+
+    # 判断x，y这个位置有没有我的鱼
+    def judge_in_mplayer(self, x, y):
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            if player.x == x and player.y == y:
+                return True
+        return False
+
+    # 传送门是x, y,敌人到这里是step步，used_player_key是用过的鱼的key
+    def get_near_player(self, x, y, used_player_key, step):
+        ret_dis, ret_key, ret_move = None, None, None
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            if k in used_player_key:
+                continue
+            dis, move, cell = self.get_min_dis(player.x, player.y, x, y)
+
+            # 如果我比你慢或者跟你同时到，我就直接堵门
+            if dis >= step:
+                if ret_dis == None or dis < ret_dis:
+                    ret_dis, ret_key, ret_move = dis, k, move
+                continue
+
+            # 如果你在我视野范围之外，我就直接追你。否则我就差两步才追你
+            if False == self.judge_in_vision(player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y):
+                continue
+            elif step - dis >= 2:
+                continue
+
+            if ret_dis == None or dis < ret_dis:
+                ret_dis, ret_key, ret_move = dis, k, move
+
+        if ret_key == None:
+            return False
+
+        mPlayers[ret_key].move = ret_move
+        used_player_key.add(ret_key)
+        mLogger.info("[卡传送门] [Tunnel: ({}, {}); player: {}; point: ({}, {}); move: {}; 我的距离: {}; 敌人的距离: {}]".format(
+            x,
+            y,
+            mPlayers[ret_key].id,
+            mPlayers[ret_key].x,
+            mPlayers[ret_key].y,
+            mPlayers[ret_key].move,
+            ret_dis,
+            step
+        ))
+        return True
+
+    # 开始抓捕
+    def start_grab(self):
+        used_player_key = set()
+
+        ret_key, ret_dis, ret_move = None, None, None
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            dis, move, cell = self.get_min_dis(
+                player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
+            if ret_dis == None or dis > ret_dis:
+                ret_key, ret_dis, ret_move = k, dis, move
+        if ret_key != None:
+            mPlayers[ret_key].move = ret_move
+            used_player_key.add(ret_key)
+
+        def bfs(used_player_key):
+            import Queue
+            q = Queue.Queue()
+            vis = set()
+
+            st = mLegStart.get_cell_id(
+                self.grab_player.predict_x, self.grab_player.predict_y)
+            q.put((0, self.grab_player.predict_x, self.grab_player.predict_y))
+            vis.add(st)
+            while False == q.empty():
+                ustep, ux, uy = q.get()
+                next_one_points = self.get_next_one_points(ux, uy)
+                for mv, vx, vy in next_one_points:
+                    if True == self.judge_in_mplayer(vx, vy):
+                        continue
+                    vcell_id = mLegStart.get_cell_id(vx, vy)
+                    if vcell_id in vis:
+                        continue
+
+                    gox, goy = self.mRoundObj.go_next(ux, uy, mv)
+                    vcell = mLegStart.get_graph_cell(gox, goy)
+
+                    if mLegStart.match_tunnel(vcell):
+                        flag = self.get_near_player(
+                            vx, vy, used_player_key, ustep + 1)
+                        if flag == True:
+                            new_next = self.get_next_one_points(vx, vy)
+                            for nm, nnx, nny in new_next:
+                                ncell = mLegStart.get_cell_id(nnx, nny)
+                                vis.add(ncell)
+                    else:
+                        q.put((ustep + 1, vx, vy))
+                    vis.add(vcell_id)
+        bfs(used_player_key)
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            if k in used_player_key:
+                continue
+            dis, move, cell = self.get_min_dis(
+                player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
+            player.move = move
+            mLogger.info("[逼近] [player: {}; point: ({}, {}); move: {}]".format(
+                player.id, player.x, player.y, player.move
+            ))
+
+    def do_grab_excute(self):
+        flag = self.confirm_grab_player()
+        if True == flag:
+            mLogger.info("[敌人] [player: {}; point: ({}, {}); predict: ({}, {}); lost: {}]".format(
+                self.grab_player.id,
+                self.grab_player.x,
+                self.grab_player.y,
+                self.grab_player.predict_x,
+                self.grab_player.predict_y,
+                self.grab_player.lost_vision_num
+            ))
+            self.start_grab()
+        else:
+            mLogger.info("没有能抓的敌人。。。。。。")
+            players = []
+            for k, player in mPlayers.iteritems():
+                if player.sleep == True:
+                    continue
+                players.append(player)
+            self.eat_power_or_travel(players)
 
     # 获取下一步移动的位置，仅判断是不是合法
     def get_next_one_points(self, x, y, vis_point=set()):
@@ -119,25 +273,6 @@ class DoThink(Action):
             return False
         return True
 
-    # 获取一个鱼四个方向离目标点最近的dis, move, cell
-    def get_min_dis(self, x, y, tx, ty, vis_point=set()):
-        next_one_points = self.get_next_one_points(x, y, vis_point)
-        min_dis, min_move, min_cell, min_url_dis = None, None, None, None
-        for move, go_x, go_y in next_one_points:
-            dis = mLegStart.get_short_length(go_x, go_y, tx, ty)
-            url_dis = (go_x - tx) ** 2 + (go_y - ty) ** 2
-            if min_dis == None or dis < min_dis or (dis == min_dis and url_dis < min_url_dis):
-                min_dis, min_move, min_url_dis = dis, move, url_dis
-                cell_id = mLegStart.get_cell_id(go_x, go_y)
-                min_cell = cell_id
-
-        if min_dis == None:
-            mLogger.warning("[player: {}; point: ({}, {})] 无路可走".format(
-                player.id, player.x, player.y))
-            return -1, "", -1
-
-        return min_dis, min_move, min_cell
-
     # 敌人的安全位置为0，增员
     def increase_player(self, grab_player, used_player_id):
         ret_dis, ret_key, ret_move = None, None, None
@@ -198,7 +333,6 @@ class DoThink(Action):
             if flag == False:
                 continue
 
-
             flag = True
             danger_points = set()
             max_safe_num = None
@@ -220,12 +354,11 @@ class DoThink(Action):
             sum_url_dis = 0
             for pid, em, ex, ey in enum:
                 cell = mLegStart.get_cell_id(ex, ey)
-                if cell in danger_points:
-                    action.append((pid, em, ex, ey))
-                    sum_dis += mLegStart.get_short_length(
-                        ex, ey, grab_player.predict_x, grab_player.predict_y)
-                    sum_url_dis += (ex - grab_player.predict_x) ** 2 + \
-                        (ey - grab_player.predict_y) ** 2
+                action.append((pid, em, ex, ey))
+                sum_dis += mLegStart.get_short_length(
+                    ex, ey, grab_player.predict_x, grab_player.predict_y)
+                sum_url_dis += (ex - grab_player.predict_x) ** 2 + \
+                    (ey - grab_player.predict_y) ** 2
 
             if result == None:
                 result = {
@@ -482,10 +615,11 @@ class DoThink(Action):
         mLogger.info("开始进行围剿......")
         if True == self.force_grab_player():
             return
-        mLogger.info("围剿失败，先吃能量......")
-        used_player_id = self.all_eat_powers()
-        mLogger.info("吃完能量了，逼近还是巡逻")
-        self.approach_grab_player(used_player_id)
+        mLogger.info("................微操失败.............\n")
+        self.do_grab_excute()
+        # used_player_id = self.all_eat_powers()
+        # mLogger.info("吃完能量了，逼近还是巡逻")
+        # self.approach_grab_player(used_player_id)
 
 
 mDoThink = DoThink()

@@ -24,15 +24,16 @@ class Action(object):
             return
 
         mLogger.info(self.weight_moves)
-        mLogger.info('[fish: {}, from: ({}, {}), move: {}]'.format(
+        mLogger.info('[player: {}, point: ({}, {}), move: {}]'.format(
             player.id, player.x, player.y, player.move))
 
     # 获取一个鱼四个方向离目标点最近的dis, move, cell
     def get_min_dis(self, x, y, tx, ty, vis_point=set()):
         next_one_points = self.get_next_one_points(x, y, vis_point)
+        next_one_points.append(("", x, y))
         min_dis, min_move, min_cell, min_url_dis = None, None, None, None
         for move, go_x, go_y in next_one_points:
-            dis = mLegStart.get_short_length(go_x, go_y, tx, ty)
+            dis = mLegStart.get_short_length(go_x, go_y, tx, ty) + 1
             url_dis = (go_x - tx) ** 2 + (go_y - ty) ** 2
             if min_dis == None or dis < min_dis or (dis == min_dis and url_dis < min_url_dis):
                 min_dis, min_move, min_url_dis = dis, move, url_dis
