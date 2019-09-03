@@ -15,7 +15,7 @@ class Action(object):
         self.mRoundObj = ""
         self.weight_moves = dict()
         self.HAVE_RET_POINT = set()
-        self.RANDOM_TRAVEL = 0.2  # 随机数超过这个才开始吃金币，增加随机率
+        self.RANDOM_TRAVEL = 0.1  # 随机数超过这个才开始吃金币，增加随机率
         self.LIMIT_LOST_VISION = 2  # 小于等于这个数字，才算能抓
 
     # 打印详细log
@@ -216,18 +216,8 @@ class Action(object):
                     min_vis_count, ret_x, ret_y = num, power.x, power.y
 
         if min_vis_count == None:
-            next_one_points = self.get_next_one_points(player.x, player.y)
-            min_cnt, ret_move = None, None
-            for mv, nx, ny in next_one_points:
-                cell = mLegStart.get_cell_id(nx, ny)
-                cnt = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
-                if min_cnt == None or cnt < min_cnt:
-                    min_cnt, ret_move = cnt, mv
-            player.move = ret_move
-            mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}]".format(
-                player.id, player.x, player.y, player.move
-            ))
-
+            # 在视野中离得最近的x,y
+            ret_dis, ret_x, ret_y = None, None, None
             for k, p in mPlayers.iteritems():
                 if p.sleep == True:
                     continue
@@ -235,8 +225,24 @@ class Action(object):
                     continue
                 if self.judge_in_vision(player.x, player.y, p.x, p.y):
                     dis, move, cell = self.get_min_dis(player.x, player.y, p.x, p.y)
-                    
+                    if ret_dis == None or dis < ret_dis:
+                        ret_dis, ret_x, ret_y = dis, p.x, p.y
+            if ret_dis == None:
+                next_one_points = self.get_next_one_points(player.x, player.y)
+                min_cnt, ret_move = None, None
+                for mv, nx, ny in next_one_points:
+                    cell = mLegStart.get_cell_id(nx, ny)
+                    cnt = self.mRoundObj.VIS_POWER_COUNT.get(cell, 0)
+                    if min_cnt == None or cnt < min_cnt:
+                        min_cnt, ret_move = cnt, mv
+                player.move = ret_move
+            else:
+                dis, move, cell = self.get_max_dis(player.x, player.y, ret_x, ret_y)
+                player.move = move
 
+            mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}]".format(
+                player.id, player.x, player.y, player.move
+            ))
         else:
             dis, move, cell = self.get_min_dis(
                 player.x, player.y, ret_x, ret_y, self.HAVE_RET_POINT)

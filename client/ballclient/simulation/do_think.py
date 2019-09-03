@@ -34,6 +34,10 @@ class DoThink(Action):
             return True
         ret_key = None
         for k, player in othPlayers.iteritems():
+            if player.predict_x == None:
+                continue
+            # if player.score <= 10:
+            #     continue
             if player.visiable == True:
                 self.grab_player = player
                 return True

@@ -21,6 +21,8 @@ class LegStart(object):
         self.fa = []
         self.graph_weight = dict()
         self.my_team_force = None
+        self.FATHER = dict()
+        self.SONS = dict()
 
     # 更新最短路径的二维字典，u-v的路径是个list
     def update_short_path_dict(self, key1, key2, value):
@@ -382,6 +384,8 @@ class LegStart(object):
         self.my_team_force = None
         mPlayers.clear()
         othPlayers.clear()
+        self.FATHER.clear()
+        self.SONS.clear()
         mLogger.info(self.msg)
 
     # 创建所有player obj
@@ -406,6 +410,89 @@ class LegStart(object):
                         force=force,
                     )
 
+    # 创建所有边关联
+    def create_edge(self):
+        def go_next(x, y, move):
+            if move == "":
+                return x, y
+            if move == 'up':
+                return x, y - 1
+            if move == 'down':
+                return x, y + 1
+            if move == 'left':
+                return x - 1, y
+            if move == 'right':
+                return x + 1, y
+
+        # x, y这个点在向move这方向移动后，真正的坐标是哪里，有虫洞或者传送带
+        def real_go_point(x, y, move):
+            go_x, go_y = go_next(x, y, move)
+            if False == self.match_border(go_x, go_y):
+                return None, None
+            go_cell = self.get_graph_cell(go_x, go_y)
+            if self.match_tunnel(go_cell):
+                go_cell_id = self.get_cell_id(go_x, go_y)
+                go_x, go_y = self.get_x_y(mLegStart.do_tunnel(go_cell_id))
+            if self.match_wormhole(go_cell):
+                go_x, go_y = self.get_x_y(mLegStart.do_wormhoe(go_cell))
+            return go_x, go_y
+
+        # 获取下一步移动的位置，仅判断是不是合法
+        def get_next_one_points(x, y):
+            moves = ['up', 'down', 'left', 'right']
+            result = []
+            for move in moves:
+                # 获取move之后真正到达的位置
+                go_x, go_y = real_go_point(x, y, move)
+                if go_x == None:
+                    continue
+                if False == self.match_border(go_x, go_y):
+                    continue
+                if go_x == x and go_y == y:
+                    continue
+                result.append((move, go_x, go_y))
+            return result
+
+        width = mLegStart.msg['msg_data']['map']['width']
+        height = mLegStart.msg['msg_data']['map']['height']
+        for x in range(width):
+            for y in range(height):
+                cell = self.get_graph_cell(x, y)
+                if cell != '.' and False == self.match_wormhole(cell):
+                    continue
+
+                ucell = self.get_cell_id(x, y)
+                next_points = get_next_one_points(x, y)
+                for mv, nx, ny in next_points:
+                    vcell = self.get_cell_id(nx, ny)
+
+                    t1 = self.FATHER.get(vcell, set())
+                    t1.add(ucell)
+                    self.FATHER[vcell] = t1
+
+                    t2 = self.SONS.get(ucell, set())
+                    t2.add(vcell)
+                    self.SONS[ucell] = t2
+        # mLogger.info(self.FATHER)
+        # mLogger.info(self.SONS)
+
+        # for k, v in self.SONS.iteritems():
+        #     ux, uy = self.get_x_y(k)
+        #     info = "[({}, {})] -> ".format(ux, uy)
+        #     for it in v:
+        #         vx, vy = self.get_x_y(it)
+        #         info += "({}, {}); ".format(vx, vy)
+        #     mLogger.info(info)
+
+        # mLogger.info("----------------------")
+        # for k, v in self.FATHER.iteritems():
+        #     ux, uy = self.get_x_y(k)
+        #     info = "[({}, {})] <- ".format(ux, uy)
+        #     for it in v:
+        #         vx, vy = self.get_x_y(it)
+        #         info += "({}, {}); ".format(vx, vy)
+        #     mLogger.info(info)
+
     def excute(self, msg):
         # 初始化赋值msg
         self.initialize_msg(msg)
@@ -424,6 +511,8 @@ class LegStart(object):
         self.cal_grath_weight()
         #
         self.create_player_obj()
+        #
+        self.create_edge()
 
 
 mLegStart = LegStart()
