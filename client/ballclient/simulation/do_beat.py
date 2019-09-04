@@ -118,7 +118,7 @@ class DoBeat(Action):
             move, uid, ustep = q.get()
             errx, erry = mLegStart.get_x_y(uid)
 
-            if ustep >= 7:
+            if ustep >= 8:
                 break
 
             st = move_distance[move].get(ustep, [])

@@ -16,9 +16,12 @@ from ballclient.simulation.my_leg_end import mLegEnd
 class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
-    
+        self.grab_player = None
+
     def init(self):
-        pass
+        self.grab_player = None
+
+    # def 
 
     def do_excute(self):
         for k, player in mPlayers.iteritems():
