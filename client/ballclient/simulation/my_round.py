@@ -23,6 +23,7 @@ class Round(object):
         self.power_set = dict()
         self.neighbar_power = None
         self.mode = None
+        self.last_remain_life = None
 
     def init(self):
         self.power_set.clear()
@@ -118,10 +119,26 @@ class Round(object):
 
     # 更新一下每个鱼访问过的点
     def do_after_updated(self):
+        remain_life = 0
+        for team in self.msg['msg_data']['teams']:
+            if team['id'] == config.team_id:
+                remain_life = team['remain_life']
+        if self.last_remain_life == None:
+            self.last_remain_life = remain_life
+
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
+                if self.last_remain_life <= 0:
+                    continue
                 mLogger.warning(">睡眠，被吃了< [fish: {}; point: ({}, {}); move: {}]".format(
                     player.id, player.x, player.y, player.move))
+
+                eated_info = mLegEnd.eated_info.get(player.id, dict())
+                eated_info = {
+                    'count': eated_info.get('count', 0) + 1,
+                    'score': eated_info.get('score', 0) + 10 + player.score
+                }
+                mLegEnd.eated_info[player.id] = eated_info
 
     # 获取action准备动作，先对所有鱼求最短路。然后根据模式不同执行不同的策略。
     def make_action(self):

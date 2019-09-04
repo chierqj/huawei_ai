@@ -8,6 +8,7 @@ class LegEnd(object):
     def __init__(self):
         self.msg = ""
         self.tolPoint = dict()
+        self.eated_info = dict()
 
     def initialize_msg(self, msg):
         self.msg = msg
