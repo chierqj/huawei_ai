@@ -21,6 +21,9 @@ class DoThink(Action):
         pass
 
     def do_excute(self):
-        pass
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            player.move = ""
 
 mDoThink = DoThink()

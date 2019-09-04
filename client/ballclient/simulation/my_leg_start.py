@@ -208,7 +208,7 @@ class LegStart(object):
             self.tunnel_go[u] = self.get_cell_id(px, py)
 
     # 虫洞的时候，返回对应另一个位置的映射id
-    def do_wormhoe(self, alp):
+    def do_wormhole(self, alp):
         nalp = alp.lower() if alp.isupper() else alp.upper()
         ret = self.get_cell_id(self.wormhole[nalp][0], self.wormhole[nalp][1])
         return ret
@@ -245,7 +245,7 @@ class LegStart(object):
                 go_cell_id = self.get_cell_id(go_x, go_y)
                 go_x, go_y = self.get_x_y(mLegStart.do_tunnel(go_cell_id))
             if self.match_wormhole(go_x, go_y):
-                go_x, go_y = self.get_x_y(mLegStart.do_wormhoe(go_cell))
+                go_x, go_y = self.get_x_y(mLegStart.do_wormhole(go_cell))
             return go_x, go_y
 
         # 获取下一步移动的位置，仅判断是不是合法
@@ -275,8 +275,8 @@ class LegStart(object):
                 for mv, nx, ny in next_points:
                     vcell = self.get_cell_id(nx, ny)
 
-                    fathers = self.FATHER.get(vcell, set())
-                    fathers.add(ucell)
+                    fathers = self.FATHER.get(vcell, [])
+                    fathers.append((x, y))
                     self.FATHER[vcell] = fathers
 
                     sons = self.SONS.get(ucell, [])
@@ -417,9 +417,13 @@ class LegStart(object):
         self.create_edge()
         self.create_player_obj()
 
-        for k, v in self.SONS.iteritems():
-            ux, uy = self.get_x_y(k)
-            mLogger.info("({}, {}) -> {}".format(ux, uy, v))
+        # for k, v in self.SONS.iteritems():
+        #     ux, uy = self.get_x_y(k)
+        #     mLogger.info("({}, {}) -> {}".format(ux, uy, v))
+
+        # for k, v in self.FATHER.iteritems():
+        #     ux, uy = self.get_x_y(k)
+        #     mLogger.info("({}, {}) <- {}".format(ux, uy, v))
 
 
 mLegStart = LegStart()

@@ -20,80 +20,108 @@ class Round(object):
                 "actions": []
             }
         }
-        self.POWER_WAIT_SET = dict()
+        self.power_set = dict()
         self.neighbar_power = None
-        self.my_alive_player_num = 0
-        self.limit_dead_weight = -1.0
-        self.VIS_POWER_COUNT = dict()
         self.mode = None
 
     def init(self):
-        self.POWER_WAIT_SET.clear()
+        self.power_set.clear()
         self.neighbar_power = None
-        self.VIS_POWER_COUNT.clear()
         self.mode = None
 
     # 暴露给service使用的，获取最终结果
     def get_result(self):
         return self.result
 
-    # 检查players是否存在，True表示存在
-    def check_players(self):
-        return "players" in self.msg["msg_data"]
+    '''
+    初始化+更新状态操作
+    1. 初始化消息
+    2. 更新players状态
+    3. 更新矿点信息，包括矿点自身信息以及地图累加矿点
+    4. 刷新完之后做一些工作
+    '''
 
-    # 检查teamid是否存在player，True表示存在
-    def check_team(self, player):
-        return "team" in player
+    # 初始化赋值msg消息;更新fish和power集合
+    def initialize_msg(self, msg):
+        self.msg = msg
+        if self.neighbar_power == None:
+            self.neighbar_power = [
+                [0] * mLegStart.width for _ in range(mLegStart.height)]
+        if self.mode == None or self.mode != self.msg['msg_data']['mode']:
+            self.power_set.clear()
+        self.mode = self.msg['msg_data']['mode']
 
-    # 检查power是否存在，True表示存在
-    def check_power(self):
-        return "power" in self.msg["msg_data"]
+    # 更新一下所有玩家的状态
+    def update_players(self):
+        for k, player in mPlayers.iteritems():
+            player.sleep = True
+            player.visiable = False
+            player.lost_vision_num += 1
+        for k, player in othPlayers.iteritems():
+            player.sleep = True
+            player.visiable = False
+            player.lost_vision_num += 1
 
-    # 检查wormhole是否存在，True表示存在
-    def check_wormhole(self):
-        return "wormhole" in mLegStart.msg["msg_data"]["map"]
+        players = self.msg['msg_data'].get('players', [])
+        for player in players:
+            team_id = player.get("team", -1)
+            pid = player.get("id", -1)
+            if team_id == config.team_id:
+                mPlayers[pid].x = player['x']
+                mPlayers[pid].y = player['y']
+                mPlayers[pid].sleep = (False if player['sleep'] == 0 else True)
+                mPlayers[pid].visiable = True
+                mPlayers[pid].score = player['score']
+                mPlayers[pid].lost_vision_num = 0
+            else:
+                othPlayers[pid].x = player['x']
+                othPlayers[pid].y = player['y']
+                othPlayers[pid].sleep = (
+                    False if player['sleep'] == 0 else True)
+                othPlayers[pid].visiable = True
+                othPlayers[pid].score = player['score']
+                othPlayers[pid].lost_vision_num = 0
 
-    # 判断边界，True表示在边界内
-    def match_border(self, x, y):
-        if x < 0 or x >= mLegStart.msg['msg_data']['map']['width']:
-            return False
-        if y < 0 or y >= mLegStart.msg['msg_data']['map']['height']:
-            return False
-        return True
+    # 更新一下能量的状态
+    def update_power_set(self):
+        for k, v in self.power_set.iteritems():
+            v.lost_vision_num += 1
+            v.visiable = False
+        powers = self.msg['msg_data'].get("power", [])
+        for power in powers:
+            cell_id = mLegStart.get_cell_id(power['x'], power['y'])
+            if cell_id in self.power_set:
+                self.power_set[cell_id].x = power['x']
+                self.power_set[cell_id].y = power['y']
+                self.power_set[cell_id].lost_vision_num = 0
+                self.power_set[cell_id].visiable = True
+                self.power_set[cell_id].point = power['point']
+            else:
+                self.power_set[cell_id] = Power(
+                    x=power['x'],
+                    y=power['y'],
+                    point=power['point'],
+                    visiable=True,
+                    lost_vision_num=0
+                )
 
-    # 判断是否为陨石，True表示为陨石，不能走
-    def match_meteor(self, px, py):
-        if mLegStart.get_graph_cell(px, py) == '#':
-            return True
-        return False
+                width = mLegStart.width
+                height = mLegStart.height
+                vision = mLegStart.msg['msg_data']['map']['vision']
+                x1, y1 = max(0, power['x'] -
+                             vision), max(0, power['y'] - vision)
+                x2, y2 = min(
+                    width - 1, power['x'] + vision), min(height - 1, power['y'] + vision)
+                for i in range(x1, x2 + 1):
+                    for j in range(y1, y2 + 1):
+                        self.neighbar_power[i][j] += power['point']
 
-    # 根据move改变坐标
-    def go_next(self, x, y, move):
-        if move == "":
-            return x, y
-        if move == 'up':
-            return x, y - 1
-        if move == 'down':
-            return x, y + 1
-        if move == 'left':
-            return x - 1, y
-        if move == 'right':
-            return x + 1, y
-
-    # x, y这个点在向move这方向移动后，真正的坐标是哪里，有虫洞或者传送带
-    def real_go_point(self, x, y, move):
-        go_x, go_y = self.go_next(x, y, move)
-        if False == self.match_border(go_x, go_y):
-            return None, None
-        if True == self.match_meteor(go_x, go_y):
-            return None, None
-        go_cell = mLegStart.get_graph_cell(go_x, go_y)
-        if mLegStart.match_tunnel(go_cell):
-            go_cell_id = mLegStart.get_cell_id(go_x, go_y)
-            go_x, go_y = mLegStart.get_x_y(mLegStart.do_tunnel(go_cell_id))
-        if mLegStart.match_wormhole(go_cell):
-            go_x, go_y = mLegStart.get_x_y(mLegStart.do_wormhoe(go_cell))
-        return go_x, go_y
+    # 更新一下每个鱼访问过的点
+    def do_after_updated(self):
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                mLogger.warning(">睡眠，被吃了< [fish: {}; point: ({}, {}); move: {}]".format(
+                    player.id, player.x, player.y, player.move))
 
     # 获取action准备动作，先对所有鱼求最短路。然后根据模式不同执行不同的策略。
     def make_action(self):
@@ -110,123 +138,29 @@ class Round(object):
 
         self.result['msg_data']['actions'] = action
 
-    # 初始化赋值msg消息;更新fish和power集合
-    def initialize_msg(self, msg):
-        self.msg = msg
-        self.my_alive_player_num = 0
-
-        if self.neighbar_power == None:
-            width = mLegStart.msg['msg_data']['map']['width']
-            height = mLegStart.msg['msg_data']['map']['height']
-            self.neighbar_power = [[0] * width for _ in range(height)]
-
-        if self.mode == None or self.mode != self.msg['msg_data']['mode']:
-            self.VIS_POWER_COUNT.clear()
-        self.mode = self.msg['msg_data']['mode']
-
-    # 更新players状态
-    def initialize_players(self):
-        for k, value in mPlayers.iteritems():
-            value.initialize()
-            value.update_last_appear()
-        for k, value in othPlayers.iteritems():
-            value.initialize()
-            value.update_last_appear()
-
-    # 看到能量的时候，给周围视野范围内的能量值都累加
-    def add_neighbar_power(self, x, y, point):
-        width = mLegStart.msg['msg_data']['map']['width']
-        height = mLegStart.msg['msg_data']['map']['height']
-        vision = mLegStart.msg['msg_data']['map']['vision']
-        x1, y1 = max(0, x - vision), max(0, y - vision)
-        x2, y2 = min(width - 1, x + vision), min(height - 1, y + vision)
-        for i in range(x1, x2 + 1):
-            for j in range(y1, y2 + 1):
-                self.neighbar_power[i][j] += point
-
-    # 更新一下所有玩家的状态
-    def update_player_wait_set(self):
-        if False == self.check_players():
-            return
-        players = self.msg['msg_data'].get('players', [])
-        for player in players:
-            team_id = player.get("team", -1)
-            pid = player.get("id", -1)
-            if team_id == config.team_id:
-                mPlayers[pid].assign(
-                    last_appear_dis=0,
-                    score=player['score'],
-                    sleep=(False if player['sleep'] == 0 else True),
-                    x=player['x'],
-                    y=player['y'],
-                    visiable=True
-                )
-                self.my_alive_player_num += 1
-                cell = mLegStart.get_cell_id(player['x'], player['y'])
-                num = self.VIS_POWER_COUNT.get(cell, 0)
-                self.VIS_POWER_COUNT[cell] = num + 1
-            else:
-                othPlayers[pid].assign(
-                    last_appear_dis=0,
-                    score=player['score'],
-                    sleep=(False if player['sleep'] == 0 else True),
-                    x=player['x'],
-                    y=player['y'],
-                    visiable=True
-                )
-
-    # 更新一下能量的状态
-    def update_power_wait_set(self):
-        for k, v in self.POWER_WAIT_SET.iteritems():
-            v.update_last_appear()
-        if False == self.check_power():
-            return
-        for power in self.msg['msg_data']['power']:
-            cell_id = mLegStart.get_cell_id(power['x'], power['y'])
-            if cell_id in self.POWER_WAIT_SET:
-                self.POWER_WAIT_SET[cell_id].assign(
-                    last_appear_dis=0,
-                    x=power['x'],
-                    y=power['y'],
-                    point=power['point'],
-                    visiable=True
-                )
-            else:
-                self.POWER_WAIT_SET[cell_id] = Power(
-                    last_appear_dis=0,
-                    x=power['x'],
-                    y=power['y'],
-                    point=power['point'],
-                    visiable=True
-                )
-                self.add_neighbar_power(power['x'], power['y'], power['point'])
-
     # 打印日志
     def print_log(self):
         round_id = self.msg['msg_data']['round_id']
         mLogger.info(
             "\n\n-------------------------[round: {}]-------------------------\n".format(round_id))
 
-    # 更新一下每个鱼访问过的点
-    def update_vis_set(self):
-        for k, player in mPlayers.iteritems():
-            if player.sleep == True:
-                player.vis_point_count.clear()
-                mLogger.warning(">睡眠，被吃了< [fish: {}; point: ({}, {}); move: {}; dead_weight: {}]".format(
-                    player.id, player.x, player.y, player.move, player.dead_weight))
-            else:
-                cell_id = mLegStart.get_cell_id(player.x, player.y)
-                num = player.vis_point_count.get(cell_id, 0)
-                player.vis_point_count[cell_id] = num + 1
+    '''
+    程序入口流程
+    1. 初始化msg消息
+    2. 打印round_id
+    3. 更新players状态
+    4. 更新powers状态
+    5. 做一些刷新完状态之后的工作
+    6. 开始这一回合的round
+    '''
 
     # 程序入口
     def excute(self, msg):
         self.initialize_msg(msg)
         self.print_log()
-        self.initialize_players()
-        self.update_player_wait_set()
-        self.update_power_wait_set()
-        self.update_vis_set()
+        self.update_players()
+        self.update_power_set()
+        self.do_after_updated()
         self.make_action()
 
 

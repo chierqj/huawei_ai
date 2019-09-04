@@ -16,13 +16,7 @@ class Player(object):
         self.x = x
         self.y = y
         self.visiable = visiable
-        self.target = None
 
-        # 奖惩相关的变量
-        self.last_appear_dis = last_appear_dis
-
-        # 走过的路
-        self.vis_point_count = dict()
 
         # 每一时刻的move
         self.move = ""
@@ -31,26 +25,9 @@ class Player(object):
         self.predict_x = None
         self.predict_y = None
 
-        # 死亡的weight
-        self.dead_weight = None
-
         # 丢失视野连续多少回合
         self.lost_vision_num = 0
 
-    def initialize(self):
-        self.sleep = True
-
-    def assign(self, last_appear_dis, score, sleep, x, y, visiable):
-        self.last_appear_dis = last_appear_dis
-        self.score = score
-        self.sleep = sleep
-        self.x = x
-        self.y = y
-        self.visiable = visiable
-
-    def update_last_appear(self):
-        self.last_appear_dis += 1
-        self.visiable = False
 
 
 mPlayers = dict()
