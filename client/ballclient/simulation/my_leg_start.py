@@ -18,11 +18,74 @@ class LegStart(object):
         self.graph = []    # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
         self.direction = ['down', 'up', 'right', 'left']
         self.tol_cells = 0
-        self.fa = []
-        self.graph_weight = dict()
         self.my_team_force = None
         self.FATHER = dict()
         self.SONS = dict()
+        self.width = None
+        self.height = None
+
+    '''
+    暴露给外面的接口
+    1. 获取最短路经
+    2. 获取最短路径长度
+    '''
+    # 暴露给其它地方用的获取两个点之间的最短路径，再config配置中需要打开
+
+    def get_short_path(self, x1, y1, x2, y2):
+        if self.match_border(x1, y1):
+            return None
+        if self.match_border(x2, y2):
+            return None
+
+        pid1 = self.get_cell_id(x1, y1)
+        pid2 = self.get_cell_id(x2, y2)
+        result = None
+        if pid1 in self.short_path:
+            result = self.short_path[pid1].get(pid2, None)
+        if None == result:
+            self.create_short_path(pid1)
+
+        if pid1 not in self.short_path:
+            mLogger.warning("({}, {})这个点被孤立了，哪里都去不了".format(x1, y1, x2, y2))
+        else:
+            result = self.short_path[pid1].get(pid2, None)
+        if None == result:
+            mLogger.warning("({}, {}) 到 ({}, {})找不到最短路".format(x1, y1, x2, y2))
+        return result
+
+    # 暴露给其它地方用的获取两个点之间的最短路径，再config配置中需要打开
+    def get_short_length(self, x1, y1, x2, y2):
+        if self.match_border(x1, y1):
+            mLogger.warning("start_point: ({}, {})越界了".format(x1, y1))
+            return None
+        if self.match_border(x2, y2):
+            mLogger.warning("end_point: ({}, {})越界了".format(x2, y2))
+            return None
+        if x1 == x2 and y1 == y2:
+            return 0
+
+        pid1 = self.get_cell_id(x1, y1)
+        pid2 = self.get_cell_id(x2, y2)
+        result = None
+
+        if pid1 in self.short_length:
+            result = self.short_length[pid1].get(pid2, None)
+        if None == result:
+            self.create_short_path(pid1)
+        if pid1 not in self.short_length:
+            mLogger.warning("({}, {})这个点被孤立了，哪里都去不了".format(x1, y1, x2, y2))
+        else:
+            result = self.short_length[pid1].get(pid2, None)
+        if None == result:
+            mLogger.warning("({}, {}) 到 ({}, {})找不到最短路".format(x1, y1, x2, y2))
+        return result
+
+    '''
+    保存路径信息相关:
+    1. 更新保存最短路经
+    2. 更新保存最短路经的第一步
+    3. 更新保存最短路径长度
+    '''
 
     # 更新最短路径的二维字典，u-v的路径是个list
     def update_short_path_dict(self, key1, key2, value):
@@ -45,51 +108,68 @@ class LegStart(object):
         else:
             self.short_length.update({key1: {key2: value}})
 
-    # 判断x, y超出地图的范围了
-    def out_graph_border(self, x, y):
+    '''
+    地图自身物理属性相关：
+    1. 根据(x, y)获取映射id
+    2. 根据映射id获取(x, y)
+    3. 判断(x, y)是否超出边界
+    4. 判断(x, y)物理上是不是可以走 [边界 & 障碍]
+    5. 判断(x, y)是不是传送带
+    6. 判断(x, y)是不是虫洞
+    7. 判断(x, y)是不是满足bfs的起点条件 [. | 虫洞]
+    8. 根据(x, y)获取地图的元素
+    '''
+
+    # condition 1
+    def get_cell_id(self, x, y):
+        return x * self.msg['msg_data']['map']['width'] + y
+
+    # condition 2
+    def get_x_y(self, pid):
+        x = int(pid / self.msg['msg_data']['map']['width'])
+        y = pid % self.msg['msg_data']['map']['width']
+        return x, y
+
+    # condition 3
+    def match_border(self, x, y):
         if x < 0 or x >= self.msg['msg_data']['map']['width']:
             return True
         if y < 0 or y >= self.msg['msg_data']['map']['height']:
             return True
         return False
 
-    # 符不符合求最短路bfs的条件，必须是空地或者虫洞
-    def match_bfs(self, st):
-        x, y = self.get_x_y(st)
-        cell = self.get_graph_cell(x, y)
-        if cell == '.' or self.match_wormhole(cell):
-            return True
-        return False
-
-    # 根据x, y坐标获取地图每个格子映射的id
-    def get_cell_id(self, x, y):
-        return x * self.msg['msg_data']['map']['width'] + y
-
-    # 根于地图每个格子的映射的id获取x,y坐标
-    def get_x_y(self, pid):
-        x = int(pid / self.msg['msg_data']['map']['width'])
-        y = pid % self.msg['msg_data']['map']['width']
-        return x, y
-
-    # 判断x, y点是不是物理上可以走。不超过边界 & 不是障碍物
-    def match_border(self, x, y):
-        if self.out_graph_border(x, y):
+    # condition 4
+    def match_physic_can_go(self, x, y):
+        if self.match_border(x, y):
             return False
         if self.get_graph_cell(x, y) == '#':
             return False
         return True
 
-    # 判断c是不是传送带
-    def match_tunnel(self, c):
+    # condition 5
+    def match_tunnel(self, x, y):
+        c = self.get_graph_cell(x, y)
         if c == '>' or c == '<' or c == '^' or c == '|':
             return True
         return False
 
-    # 判断c是不是虫洞
-    def match_wormhole(self, c):
+    # condition 6
+    def match_wormhole(self, x, y):
+        c = self.get_graph_cell(x, y)
         if c.isalpha() and c.lower() in self.wormhole and c.upper() in self.wormhole:
             return True
         return False
+
+    # condition 7
+    def match_bfs(self, x, y):
+        cell = self.get_graph_cell(x, y)
+        if cell == '.' or self.match_wormhole(x, y):
+            return True
+        return False
+
+    # 因为定义横方向是x轴，因此获取px, py在地图上是什么的时候。必须用这个方法获取，否则就是反的
+    def get_graph_cell(self, px, py):
+        return self.graph[py][px]
 
     # 打印地图
     def print_graph(self):
@@ -100,6 +180,14 @@ class LegStart(object):
         for i, row in enumerate(self.graph):
             print i, "\t".join(row)
 
+    '''
+    处理地图特殊情况
+    1. 预处理传送门
+    2. 输入虫洞的字母，返回对应另一个虫洞的位置映射id
+    3. 输入一个传送带的位置映射id，返回传送带的出口位置映射id
+    4. 创建边集合
+    '''
+
     # 预处理所有的传送带
     def init_tunnel_go(self):
         for tunnel in self.msg['msg_data']['map']['tunnel']:
@@ -107,7 +195,7 @@ class LegStart(object):
             u = self.get_cell_id(px, py)
             while True:
                 cell = self.get_graph_cell(px, py)
-                if False == self.match_tunnel(cell):
+                if False == self.match_tunnel(px, py):
                     break
                 if cell == '>':
                     px += 1
@@ -133,44 +221,80 @@ class LegStart(object):
             mLogger.error("self.tunnel_go is None ({}, {})".format(x, y))
         return ret
 
-    # 当前点pid向四个方向走，获取到的move, nx, ny；move用0,1,2,3表示
-    def get_dirs(self, pid):
-        x, y = self.get_x_y(pid)
-        dirs = []
-        dirs.append((0, x, y + 1))
-        dirs.append((1, x, y - 1))
-        dirs.append((2, x + 1, y))
-        dirs.append((3, x - 1, y))
-        return dirs
+    # 创建所有边关联
+    def create_edge(self):
+        def go_next(x, y, move):
+            if move == "":
+                return x, y
+            if move == 'up':
+                return x, y - 1
+            if move == 'down':
+                return x, y + 1
+            if move == 'left':
+                return x - 1, y
+            if move == 'right':
+                return x + 1, y
 
-    # 因为定义横方向是x轴，因此获取px, py在地图上是什么的时候。必须用这个方法获取，否则就是反的
-    def get_graph_cell(self, px, py):
-        return self.graph[py][px]
+        # x, y这个点在向move这方向移动后，真正的坐标是哪里，有虫洞或者传送带
+        def real_go_point(x, y, move):
+            go_x, go_y = go_next(x, y, move)
+            if False == self.match_physic_can_go(go_x, go_y):
+                return None, None
+            go_cell = self.get_graph_cell(go_x, go_y)
+            if self.match_tunnel(go_x, go_y):
+                go_cell_id = self.get_cell_id(go_x, go_y)
+                go_x, go_y = self.get_x_y(mLegStart.do_tunnel(go_cell_id))
+            if self.match_wormhole(go_x, go_y):
+                go_x, go_y = self.get_x_y(mLegStart.do_wormhoe(go_cell))
+            return go_x, go_y
 
-    # 并查集获取集合标记id
-    def get_fa(self, x):
-        if self.fa[x] == x:
-            return x
-        else:
-            ret = self.get_fa(self.fa[x])
-            self.fa[x] = ret
-            return ret
+        # 获取下一步移动的位置，仅判断是不是合法
+        def get_next_one_points(x, y):
+            moves = ['up', 'down', 'left', 'right']
+            result = []
+            for move in moves:
+                # 获取move之后真正到达的位置
+                go_x, go_y = real_go_point(x, y, move)
+                if go_x == None:
+                    continue
+                if False == self.match_physic_can_go(go_x, go_y):
+                    continue
+                if go_x == x and go_y == y:
+                    continue
+                result.append((move, go_x, go_y))
+            return result
+
+        for x in range(self.width):
+            for y in range(self.height):
+                cell = self.get_graph_cell(x, y)
+                if cell != '.' and False == self.match_wormhole(x, y):
+                    continue
+
+                ucell = self.get_cell_id(x, y)
+                next_points = get_next_one_points(x, y)
+                for mv, nx, ny in next_points:
+                    vcell = self.get_cell_id(nx, ny)
+
+                    fathers = self.FATHER.get(vcell, set())
+                    fathers.add(ucell)
+                    self.FATHER[vcell] = fathers
+
+                    sons = self.SONS.get(ucell, [])
+                    sons.append((mv, nx, ny))
+                    self.SONS[ucell] = sons
+
+    '''
+    求最短路经，同时保存结果
+    '''
 
     # 单点最短路，顺带记录了start到它能到的其他点的最短路，不用每次都求
     def create_short_path(self, start_point):
         if start_point in self.short_length:
             return
-
         import Queue
-
         # bfs 需要变量
         q = Queue.Queue()
         vis = set()
-
-        # 记录最短路径的第一步移动方向需要变量
-        if True == config.need_short_move:
-            move_act = dict()
-            self.fa = [i for i in range(self.tol_cells)]
 
         # 记录最短路路径需要变量
         if True == config.need_short_path:
@@ -182,47 +306,17 @@ class LegStart(object):
         vis.add(start_point)
 
         while False == q.empty():
-            uid, step = q.get()
-            TX, TY = self.get_x_y(uid)
-            # mLogger.info("point: ({},{}); step: {}".format(TX, TY, step))
-            self.update_short_length_dict(start_point, uid, step)
-            dirs = self.get_dirs(uid)
-            for mv, nx, ny in dirs:
-                if False == self.match_border(nx, ny):
+            uid, ustep = q.get()
+            self.update_short_length_dict(start_point, uid, ustep)
+            sons = self.SONS.get(uid)
+            for mv, nx, ny in sons:
+                vid = self.get_cell_id(nx, ny)
+                if vid in vis:
                     continue
-                cell = self.get_graph_cell(nx, ny)
-                n_cell_id = self.get_cell_id(nx, ny)
-                if self.match_wormhole(cell):
-                    n_cell_id = self.do_wormhoe(cell)
-                elif self.match_tunnel(cell):
-                    n_cell_id = self.do_tunnel(n_cell_id)
-                if n_cell_id in vis:
-                    continue
-
-                vis.add(n_cell_id)
-                q.put((n_cell_id, step + 1))
-
-                if True == config.need_short_move:
-                    if uid == start_point:
-                        move_act[n_cell_id] = mv
-                    else:
-                        self.fa[self.get_fa(n_cell_id)] = self.get_fa(uid)
-
+                vis.add(vid)
+                q.put((vid, ustep + 1))
                 if True == config.need_short_path:
-                    pre[n_cell_id] = uid
-
-        if True == config.need_short_move:
-            for key in move_act:
-                value = move_act[key]
-                fa = self.get_fa(key)
-                move_act[fa] = value
-            for point in vis:
-                if self.match_bfs(point) and point != start_point:
-                    fa = self.get_fa(point)
-                    mv = move_act.get(fa, None)
-                    if mv != None:
-                        self.update_short_move_dict(
-                            start_point, point, self.direction[mv])
+                    pre[vid] = uid
 
         if True == config.need_short_path:
             for point in vis:
@@ -233,141 +327,12 @@ class LegStart(object):
                 path = path[::-1]
                 self.update_short_path_dict(start_point, point, path)
 
-    # 暴露给其它地方用的获取两个点之间的最短路径，再config配置中需要打开
-    def get_short_path(self, x1, y1, x2, y2):
-        if self.out_graph_border(x1, y1):
-            return None
-        if self.out_graph_border(x2, y2):
-            return None
-
-        pid1 = self.get_cell_id(x1, y1)
-        pid2 = self.get_cell_id(x2, y2)
-        result = None
-        if pid1 in self.short_path:
-            result = self.short_path[pid1].get(pid2, None)
-        if None == result:
-            self.create_short_path(pid1)
-
-        if pid1 not in self.short_path:
-            mLogger.warning("({}, {})这个点被孤立了，哪里都去不了".format(x1, y1, x2, y2))
-        else:
-            result = self.short_path[pid1].get(pid2, None)
-        if None == result:
-            mLogger.warning("({}, {}) 到 ({}, {})找不到最短路".format(x1, y1, x2, y2))
-        return result
-
-    # 暴露给其它地方用的获取两个点之间的最短路径，再config配置中需要打开
-    def get_short_length(self, x1, y1, x2, y2):
-        if self.out_graph_border(x1, y1):
-            mLogger.warning("start_point: ({}, {})越界了".format(x1, y1))
-            return None
-        if self.out_graph_border(x2, y2):
-            mLogger.warning("end_point: ({}, {})越界了".format(x2, y2))
-            return None
-        if x1 == x2 and y1 == y2:
-            return 0
-
-        pid1 = self.get_cell_id(x1, y1)
-        pid2 = self.get_cell_id(x2, y2)
-        result = None
-
-        if pid1 in self.short_length:
-            result = self.short_length[pid1].get(pid2, None)
-        if None == result:
-            self.create_short_path(pid1)
-        if pid1 not in self.short_length:
-            mLogger.warning("({}, {})这个点被孤立了，哪里都去不了".format(x1, y1, x2, y2))
-        else:
-            result = self.short_length[pid1].get(pid2, None)
-        if None == result:
-            mLogger.warning("({}, {}) 到 ({}, {})找不到最短路".format(x1, y1, x2, y2))
-        return result
-
-    # 暴露给其它地方用的获取两个点之间的最短路径的移动方向
-    def get_short_move(self, x1, y1, x2, y2):
-        if self.out_graph_border(x1, y1):
-            return None
-        if self.out_graph_border(x2, y2):
-            return None
-        if x1 == x2 and y1 == y2:
-            return ""
-
-        pid1 = self.get_cell_id(x1, y1)
-        pid2 = self.get_cell_id(x2, y2)
-
-        result = None
-        if pid1 in self.short_move:
-            result = self.short_move[pid1].get(pid2, None)
-        if None == result:
-            self.create_short_path(pid1)
-
-        if pid1 not in self.short_move:
-            mLogger.warning("({}, {})这个点被孤立了，哪里都去不了".format(x1, y1, x2, y2))
-        else:
-            result = self.short_move[pid1].get(pid2, None)
-        if None == result:
-            mLogger.warning("({}, {}) 到 ({}, {})找不到最短路".format(x1, y1, x2, y2))
-        return result
-
-    def cal_grath_weight(self):
-        width = mLegStart.msg['msg_data']['map']['width']
-        height = mLegStart.msg['msg_data']['map']['height']
-
-        for x in range(width):
-            for y in range(height):
-                dis = 0
-                tx1, ty1 = x, y
-                tx2, ty2 = x, y
-                tx3, ty3 = x, y
-                tx4, ty4 = x, y
-
-                while True:
-                    if False == self.match_border(tx1, ty1):
-                        break
-                    if False == self.match_border(tx2, ty2):
-                        break
-                    if False == self.match_border(tx3, ty3):
-                        break
-                    if False == self.match_border(tx4, ty4):
-                        break
-                    dis += 1
-                    tx1 -= 1
-                    tx2 += 1
-                    ty3 -= 1
-                    ty4 += 1
-
-                cell_id = mLegStart.get_cell_id(x, y)
-                self.graph_weight[cell_id] = dis
-        # for k, v in self.graph_weight.iteritems():
-        #     mLogger.info("k: {}; v: {}".format(k, v))
-
-    # 初始化地图数组
-    def initialize_graph(self, width, height):
-        self.graph = [['.'] * width for _ in range(height)]
-
-    # msg消息给出的传送带是up,down,left,right在graph中，存成字符形式s
-    def get_tunnel_label(self, s):
-        if s == "down":
-            return "|"
-        elif s == "up":
-            return "^"
-        elif s == "left":
-            return "<"
-        elif s == 'right':
-            return ">"
-        else:
-            return "-1"
-
-    # 创建地图，赋值地图每个格子的元素
-    def create_graph(self):
-        for meteor in self.msg['msg_data']['map']['meteor']:
-            self.graph[meteor['y']][meteor['x']] = '#'
-        for tunnel in self.msg['msg_data']['map']['tunnel']:
-            self.graph[tunnel['y']][tunnel['x']
-                                    ] = self.get_tunnel_label(tunnel["direction"])
-        for wormhole in self.msg['msg_data']['map']['wormhole']:
-            self.graph[wormhole['y']][wormhole['x']] = wormhole["name"]
-            self.wormhole[wormhole['name']] = (wormhole['x'], wormhole['y'])
+    '''
+    初始化相关
+    1. 初始化msg
+    2. 初始化地图
+    3. 初始化players对象
+    '''
 
     # 初始化赋值msg
     def initialize_msg(self, msg):
@@ -378,15 +343,40 @@ class LegStart(object):
         self.wormhole.clear()
         self.tunnel_go.clear()
         self.graph = []    # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
-        self.tol_cells = 0
-        self.fa = []
-        self.graph_weight.clear()
         self.my_team_force = None
-        mPlayers.clear()
-        othPlayers.clear()
         self.FATHER.clear()
         self.SONS.clear()
+        self.width = self.msg['msg_data']['map']['width']
+        self.height = self.msg['msg_data']['map']['height']
+        self.tol_cells = self.width * self.height
+
+        mPlayers.clear()
+        othPlayers.clear()
+
         mLogger.info(self.msg)
+
+    # 创建地图，赋值地图每个格子的元素
+    def initialize_graph(self):
+        def get_tunnel_label(s):
+            if s == "down":
+                return "|"
+            elif s == "up":
+                return "^"
+            elif s == "left":
+                return "<"
+            elif s == 'right':
+                return ">"
+            else:
+                return "-1"
+        self.graph = [['.'] * self.width for _ in range(self.height)]
+        for meteor in self.msg['msg_data']['map']['meteor']:
+            self.graph[meteor['y']][meteor['x']] = '#'
+        for tunnel in self.msg['msg_data']['map']['tunnel']:
+            self.graph[tunnel['y']][tunnel['x']
+                                    ] = get_tunnel_label(tunnel["direction"])
+        for wormhole in self.msg['msg_data']['map']['wormhole']:
+            self.graph[wormhole['y']][wormhole['x']] = wormhole["name"]
+            self.wormhole[wormhole['name']] = (wormhole['x'], wormhole['y'])
 
     # 创建所有player obj
     def create_player_obj(self):
@@ -410,109 +400,26 @@ class LegStart(object):
                         force=force,
                     )
 
-    # 创建所有边关联
-    def create_edge(self):
-        def go_next(x, y, move):
-            if move == "":
-                return x, y
-            if move == 'up':
-                return x, y - 1
-            if move == 'down':
-                return x, y + 1
-            if move == 'left':
-                return x - 1, y
-            if move == 'right':
-                return x + 1, y
+    '''
+    入口流程
+    1. 初始化消息
+    2. 初始化地图
+    3. 预处理传送带
+    4. 初始化边集合
+    5. 初始化players对象
+    '''
 
-        # x, y这个点在向move这方向移动后，真正的坐标是哪里，有虫洞或者传送带
-        def real_go_point(x, y, move):
-            go_x, go_y = go_next(x, y, move)
-            if False == self.match_border(go_x, go_y):
-                return None, None
-            go_cell = self.get_graph_cell(go_x, go_y)
-            if self.match_tunnel(go_cell):
-                go_cell_id = self.get_cell_id(go_x, go_y)
-                go_x, go_y = self.get_x_y(mLegStart.do_tunnel(go_cell_id))
-            if self.match_wormhole(go_cell):
-                go_x, go_y = self.get_x_y(mLegStart.do_wormhoe(go_cell))
-            return go_x, go_y
-
-        # 获取下一步移动的位置，仅判断是不是合法
-        def get_next_one_points(x, y):
-            moves = ['up', 'down', 'left', 'right']
-            result = []
-            for move in moves:
-                # 获取move之后真正到达的位置
-                go_x, go_y = real_go_point(x, y, move)
-                if go_x == None:
-                    continue
-                if False == self.match_border(go_x, go_y):
-                    continue
-                if go_x == x and go_y == y:
-                    continue
-                result.append((move, go_x, go_y))
-            return result
-
-        width = mLegStart.msg['msg_data']['map']['width']
-        height = mLegStart.msg['msg_data']['map']['height']
-        for x in range(width):
-            for y in range(height):
-                cell = self.get_graph_cell(x, y)
-                if cell != '.' and False == self.match_wormhole(cell):
-                    continue
-
-                ucell = self.get_cell_id(x, y)
-                next_points = get_next_one_points(x, y)
-                for mv, nx, ny in next_points:
-                    vcell = self.get_cell_id(nx, ny)
-
-                    t1 = self.FATHER.get(vcell, set())
-                    t1.add(ucell)
-                    self.FATHER[vcell] = t1
-
-                    t2 = self.SONS.get(ucell, set())
-                    t2.add(vcell)
-                    self.SONS[ucell] = t2
-        # mLogger.info(self.FATHER)
-        # mLogger.info(self.SONS)
-
-        # for k, v in self.SONS.iteritems():
-        #     ux, uy = self.get_x_y(k)
-        #     info = "[({}, {})] -> ".format(ux, uy)
-        #     for it in v:
-        #         vx, vy = self.get_x_y(it)
-        #         info += "({}, {}); ".format(vx, vy)
-        #     mLogger.info(info)
-
-        # mLogger.info("----------------------")
-        # for k, v in self.FATHER.iteritems():
-        #     ux, uy = self.get_x_y(k)
-        #     info = "[({}, {})] <- ".format(ux, uy)
-        #     for it in v:
-        #         vx, vy = self.get_x_y(it)
-        #         info += "({}, {}); ".format(vx, vy)
-        #     mLogger.info(info)
-
+    # 程序入口
     def excute(self, msg):
-        # 初始化赋值msg
         self.initialize_msg(msg)
-        width = self.msg['msg_data']['map']['width']
-        height = self.msg['msg_data']['map']['height']
-        # 定义地图的总格子数
-        self.tol_cells = width * height
-        # 初始化地图变量
-        self.initialize_graph(width, height)
-        # 根据msg消息创建地图，二维数组
-        # 空地: '.',  障碍物: '#', 虫洞: '字母', 传送带: '<>^|'
-        self.create_graph()
-        # 预处理所有传送带的位置，这个传送到可以直接到哪里
+        self.initialize_graph()
         self.init_tunnel_go()
-        # 计算地图自身每个点的权重
-        self.cal_grath_weight()
-        #
-        self.create_player_obj()
-        #
         self.create_edge()
+        self.create_player_obj()
+
+        for k, v in self.SONS.iteritems():
+            ux, uy = self.get_x_y(k)
+            mLogger.info("({}, {}) -> {}".format(ux, uy, v))
 
 
 mLegStart = LegStart()

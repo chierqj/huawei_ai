@@ -13,19 +13,11 @@ import math
 class Action(object):
     def __init__(self):
         self.mRoundObj = ""
-        self.weight_moves = dict()
-        self.HAVE_RET_POINT = set()
-        self.RANDOM_TRAVEL = 0.1  # 随机数超过这个才开始吃金币，增加随机率
-        self.LIMIT_LOST_VISION = 2  # 小于等于这个数字，才算能抓
 
     # 打印详细log
-    def record_detial(self, player):
-        if False == config.record_detial:
-            return
-
-        mLogger.info(self.weight_moves)
-        mLogger.info('[player: {}, point: ({}, {}), move: {}]'.format(
-            player.id, player.x, player.y, player.move))
+    def record_detial(self, player, text):
+        mLogger.info('[{}] [player: {}, point: ({}, {}), move: {}]'.format(
+            text, player.id, player.x, player.y, player.move))
 
     # 获取一个鱼四个方向离目标点最近的dis, move, cell
     def get_min_dis(self, x, y, tx, ty, vis_point=set()):
@@ -46,7 +38,7 @@ class Action(object):
             return -1, "", -1
 
         return min_dis, min_move, min_cell
-    
+
     # 获取一个鱼四个方向离目标点最远的dis, move, cell
     def get_max_dis(self, x, y, tx, ty, vis_point=set()):
         next_one_points = self.get_next_one_points(x, y, vis_point)
@@ -224,7 +216,8 @@ class Action(object):
                 if p.id == player.id:
                     continue
                 if self.judge_in_vision(player.x, player.y, p.x, p.y):
-                    dis, move, cell = self.get_min_dis(player.x, player.y, p.x, p.y)
+                    dis, move, cell = self.get_min_dis(
+                        player.x, player.y, p.x, p.y)
                     if ret_dis == None or dis < ret_dis:
                         ret_dis, ret_x, ret_y = dis, p.x, p.y
             if ret_dis == None:
@@ -237,7 +230,8 @@ class Action(object):
                         min_cnt, ret_move = cnt, mv
                 player.move = ret_move
             else:
-                dis, move, cell = self.get_max_dis(player.x, player.y, ret_x, ret_y)
+                dis, move, cell = self.get_max_dis(
+                    player.x, player.y, ret_x, ret_y)
                 player.move = move
 
             mLogger.info("[巡航] [player: {}; point: ({}, {}); move: {}]".format(
