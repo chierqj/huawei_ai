@@ -17,8 +17,8 @@ class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
         self.grab_player = None
-        self.USED_PLAYER_ID = set()
-        self.LIMIT_LOST_VISION = 2
+        self.USED_PLAYER_ID = set()     # 堵传送门用到的鱼的id
+        self.LIMIT_LOST_VISION = 1
 
     def init(self):
         self.grab_player = None
@@ -31,8 +31,8 @@ class DoThink(Action):
 
         ret_key = None
         for k, enemy in othPlayers.iteritems():
-            if enemy.score <= 5:
-                continue
+            # if enemy.score <= 5:
+            #     continue
             if enemy.visiable == True:
                 self.grab_player = enemy
                 return
@@ -63,7 +63,7 @@ class DoThink(Action):
             if mfish.sleep == True:
                 continue
             dis = mLegStart.get_short_length(mfish.x, mfish.y, x, y)
-            if dis <= step:
+            if dis <= step and True == self.try_close(mfish, x, y, step):
                 return True
         return False
 
@@ -81,7 +81,8 @@ class DoThink(Action):
 
     # 敌人到px, px 走了step步
     def try_close(self, player, px, py, step):
-        dis, move, cell = self.get_min_dis(player.x, player.y, px, py)
+        dis, move, cell = self.get_min_dis(
+            player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
         gox, goy = mLegStart.get_x_y(cell)
         dis, move, cell = self.get_min_dis(gox, goy, px, py)
         if dis <= step - 1:
@@ -115,16 +116,6 @@ class DoThink(Action):
         ))
         return True
 
-        # # 逼近
-        # if step - ret_dis >= 2 or (False == self.judge_in_vision(player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)):
-        #     self.get_close(mPlayers[ret_key])
-        # else:
-        #     mPlayers[ret_key].move = ret_move
-        #     mLogger.info("[卡门] [player: {}; point: ({}, {}); move: {}; 我的距离: {}]\n".format(
-        #         mPlayers[ret_key].id, mPlayers[ret_key].x, mPlayers[ret_key].y, mPlayers[ret_key].move, ret_dis, step
-        #     ))
-        # return True
-
     def start_grab(self):
         import Queue
         q = Queue.Queue()
@@ -147,7 +138,7 @@ class DoThink(Action):
                 vid = mLegStart.get_cell_id(nx, ny)
                 if vid in vis:
                     continue
-                if self.match_self_fast(nx, ny, ustep - 1):
+                if self.match_self_fast(nx, ny, ustep + 1):
                     continue
 
                 # 传送带传过来的，并且找到了堵门的

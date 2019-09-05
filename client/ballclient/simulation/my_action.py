@@ -93,6 +93,10 @@ class Action(object):
     # 四个方位最近的
     def get_min_dis(self, ux, uy, vx, vy, vis_point=set()):
         uid = mLegStart.get_cell_id(ux, uy)
+
+        if ux == vx and uy == vy:
+            return 0, "", uid
+
         import copy
         sons = copy.deepcopy(mLegStart.SONS.get(uid, []))
         sons.append(("", ux, uy))
@@ -127,8 +131,9 @@ class Action(object):
                     ret_dis, ret_move = dis, move
         if ret_move == None:
             return False
-        self.record_detial(player, "能量")
         player.move = ret_move
+        self.record_detial(player, "能量")
+        return True
 
     # 巡航
     def travel(self, player):

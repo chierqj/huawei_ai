@@ -146,8 +146,6 @@ class DoBeat(Action):
                 if True == self.match_wormhole_enemy_fast(nx, ny, ustep + 1):
                     continue
 
-                # if ustep == 0 and False == self.match_self_can_say(nx, ny):
-                #     continue
                 if ustep == 0:
                     move = mv
 
@@ -274,20 +272,6 @@ class DoBeat(Action):
                 vis.add(cell)
                 q.put((move, cell, ustep + 1))
         return ans_move
-
-    # def travel(self, player):
-    #     move = self.find_power(player)
-    #     if move != None:
-    #         player.move = move
-    #         self.record_detial(player, "能量")
-    #         return
-    #     move = self.find_faraway(player)
-    #     if move != None:
-    #         player.move = move
-    #         self.record_detial(player, "跑路")
-    #         return
-    #     player.move = ""
-    #     self.record_detial(player, "等死")
 
     def do_excute(self):
         self.USED_VISION_POINT.clear()
