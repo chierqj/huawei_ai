@@ -34,8 +34,8 @@ class DoBeat(Action):
         for k, enemy in othPlayers.iteritems():
             if enemy.visiable == False:
                 continue
-            # if self.judge_in_vision(enemy.x, enemy.y, player.x, player.y):
-            #     return True
+            if self.judge_in_vision(enemy.x, enemy.y, player.x, player.y):
+                return True
             dis = mLegStart.get_short_length(
                 enemy.x, enemy.y, player.x, player.y)
             if dis <= 5:

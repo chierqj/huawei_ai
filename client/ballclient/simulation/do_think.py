@@ -45,7 +45,8 @@ class DoThink(Action):
         else:
             self.grab_player = othPlayers[ret_key]
 
-    def error_no_sons(self, sons, uid, ux, uy):
+    def error_no_sons(self, sons, uid):
+        ux, uy = mLegStart.get_x_y(uid)
         if sons == None:
             mLogger.warning(
                 "[没有儿子] [uid: {}; point: ({}, {})]".format(uid, ux, uy))
@@ -73,11 +74,61 @@ class DoThink(Action):
             return False
         return True
 
-    def get_close(self, player):
-        dis, move, cell = self.get_min_dis(
-            player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
-        player.move = move
-        self.record_detial(player, "逼近")
+    def get_close(self, players):
+        if len(players) == 0:
+            return
+        limit_point = set()
+
+        def bfs(player):
+            import Queue
+            q = Queue.Queue()
+            vis = set()
+            start = mLegStart.get_cell_id(player.x, player.y)
+
+            q.put(("", start, 0))
+            vis.add(start)
+
+            while False == q.empty():
+                umove, uid, ustep = q.get()
+                sons = mLegStart.SONS.get(uid, None)
+                if True == self.error_no_sons(sons, uid):
+                    continue
+                for mv, nx, ny in sons:
+                    vid = mLegStart.get_cell_id(nx, ny)
+                    if ustep == 0:
+                        umove = mv
+                    if vid in vis:
+                        continue
+                    if vid in limit_point:
+                        continue
+                    if nx == self.grab_player.predict_x and ny == self.grab_player.predict_y:
+                        limit_point.add(uid)
+                        player.move = umove
+                        return True
+                    vis.add(vid)
+                    q.put((umove, vid, ustep + 1))
+            dis, move, cell = self.get_min_dis(
+                player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
+            player.move = move
+
+        def cmp(p1, p2):
+            dis1 = mLegStart.get_short_length(
+                p1.x, p1.y, self.grab_player.predict_x, self.grab_player.predict_y)
+            dis2 = mLegStart.get_short_length(
+                p2.x, p2.y, self.grab_player.predict_x, self.grab_player.predict_y)
+            if dis1 <= dis2:
+                return -1
+            return 1
+
+        players = sorted(players, cmp)
+        for player in players:
+            bfs(player)
+            self.record_detial(player, "逼近")
+
+        # dis, move, cell = self.get_min_dis(
+        #     player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
+        # player.move = move
+        # self.record_detial(player, "逼近")
 
     # 敌人到px, px 走了step步
     def try_close(self, player, px, py, step):
@@ -95,6 +146,8 @@ class DoThink(Action):
         2. 我比敌人至少快两步，我就逼近。否则我就堵门
         '''
         ret_dis, ret_key, ret_move = None, None, None
+
+        num = 0
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
@@ -103,6 +156,9 @@ class DoThink(Action):
             dis, move, cell = self.get_min_dis(player.x, player.y, x, y)
             if ret_dis == None or dis < ret_dis:
                 ret_dis, ret_key, ret_move = dis, k, move
+            num += 1
+        # if num <= 1:
+        #     return False
 
         if ret_key == None:
             return False
@@ -131,7 +187,7 @@ class DoThink(Action):
             ux, uy = mLegStart.get_x_y(uid)
             sons = mLegStart.SONS.get(uid, None)
 
-            if True == self.error_no_sons(sons, uid, ux, uy):
+            if True == self.error_no_sons(sons, uid):
                 continue
 
             for mv, nx, ny in sons:
@@ -146,7 +202,7 @@ class DoThink(Action):
                     flag = self.send_near_player(nx, ny, ustep + 1)
                     if True == flag:
                         tunl_sons = mLegStart.SONS.get(vid, None)
-                        if True == self.error_no_sons(tunl_sons, vid, nx, ny):
+                        if True == self.error_no_sons(tunl_sons, vid):
                             continue
                         for tunl_mv, tunl_x, tunl_y in tunl_sons:
                             tunl_id = mLegStart.get_cell_id(tunl_x, tunl_y)
@@ -154,12 +210,14 @@ class DoThink(Action):
                 q.put((vid, ustep + 1))
                 vis.add(vid)
 
+        players = []
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
             if player.id in self.USED_PLAYER_ID:
                 continue
-            self.get_close(player)
+            players.append(player)
+        self.get_close(players)
 
     def do_excute(self):
         self.USED_PLAYER_ID.clear()
