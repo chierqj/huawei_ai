@@ -154,7 +154,6 @@ class DoBeat(Action):
                 vis.add(cell)
                 q.put((move, cell, ustep + 1))
 
-        mLogger.info(move_distance)
         max_step, max_count, ret_move = None, None, ""
         for move, step_dict in move_distance.iteritems():
             for step, point_ary in step_dict.iteritems():
@@ -165,6 +164,15 @@ class DoBeat(Action):
                 if step > max_step or (step == max_step and count > max_count):
                     max_step, max_count, ret_move = step, count, move
         player.move = ret_move
+
+
+        d = ["", "up", "down", "left", "right"]
+        info = "各个方向位置信息\n"
+        for it in d:
+            info += "---------------- {} --------------\n".format(it)
+            for k, v in move_distance[it].iteritems():
+                info += "[dis: {}] [num: {}] [point: {}]\n".format(k, len(v), v)
+        mLogger.info(info)
         self.record_detial(player, "逃跑")
 
     '''
@@ -267,22 +275,22 @@ class DoBeat(Action):
                 q.put((move, cell, ustep + 1))
         return ans_move
 
-    def travel(self, player):
-        move = self.find_power(player)
-        if move != None:
-            player.move = move
-            self.record_detial(player, "能量")
-            return
-        move = self.find_faraway(player)
-        if move != None:
-            player.move = move
-            self.record_detial(player, "跑路")
-            return
-        player.move = ""
-        self.record_detial(player, "等死")
+    # def travel(self, player):
+    #     move = self.find_power(player)
+    #     if move != None:
+    #         player.move = move
+    #         self.record_detial(player, "能量")
+    #         return
+    #     move = self.find_faraway(player)
+    #     if move != None:
+    #         player.move = move
+    #         self.record_detial(player, "跑路")
+    #         return
+    #     player.move = ""
+    #     self.record_detial(player, "等死")
 
     def do_excute(self):
-        pass
+        self.USED_VISION_POINT.clear()
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue

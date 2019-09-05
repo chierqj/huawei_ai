@@ -32,9 +32,9 @@ class LegStart(object):
     # 暴露给其它地方用的获取两个点之间的最短路径，再config配置中需要打开
 
     def get_short_path(self, x1, y1, x2, y2):
-        if self.match_border(x1, y1):
+        if False == self.match_border(x1, y1):
             return None
-        if self.match_border(x2, y2):
+        if False == self.match_border(x2, y2):
             return None
 
         pid1 = self.get_cell_id(x1, y1)
@@ -55,10 +55,10 @@ class LegStart(object):
 
     # 暴露给其它地方用的获取两个点之间的最短路径，再config配置中需要打开
     def get_short_length(self, x1, y1, x2, y2):
-        if self.match_border(x1, y1):
+        if False == self.match_border(x1, y1):
             mLogger.warning("start_point: ({}, {})越界了".format(x1, y1))
             return None
-        if self.match_border(x2, y2):
+        if False == self.match_border(x2, y2):
             mLogger.warning("end_point: ({}, {})越界了".format(x2, y2))
             return None
         if x1 == x2 and y1 == y2:
@@ -112,7 +112,7 @@ class LegStart(object):
     地图自身物理属性相关：
     1. 根据(x, y)获取映射id
     2. 根据映射id获取(x, y)
-    3. 判断(x, y)是否超出边界
+    3. 判断(x, y)是否超出边界; True表示可以走，False表示不能走
     4. 判断(x, y)物理上是不是可以走 [边界 & 障碍]
     5. 判断(x, y)是不是传送带
     6. 判断(x, y)是不是虫洞
@@ -132,15 +132,15 @@ class LegStart(object):
 
     # condition 3
     def match_border(self, x, y):
-        if x < 0 or x >= self.msg['msg_data']['map']['width']:
-            return True
-        if y < 0 or y >= self.msg['msg_data']['map']['height']:
-            return True
-        return False
+        if x < 0 or x >= self.width:
+            return False
+        if y < 0 or y >= self.height:
+            return False
+        return True
 
     # condition 4
     def match_physic_can_go(self, x, y):
-        if self.match_border(x, y):
+        if False == self.match_border(x, y):
             return False
         if self.get_graph_cell(x, y) == '#':
             return False
@@ -148,6 +148,8 @@ class LegStart(object):
 
     # condition 5
     def match_tunnel(self, x, y):
+        if False == self.match_border(x, y):
+            return False
         c = self.get_graph_cell(x, y)
         if c == '>' or c == '<' or c == '^' or c == '|':
             return True
@@ -155,6 +157,8 @@ class LegStart(object):
 
     # condition 6
     def match_wormhole(self, x, y):
+        if False == self.match_border(x, y):
+            return False
         c = self.get_graph_cell(x, y)
         if c.isalpha() and c.lower() in self.wormhole and c.upper() in self.wormhole:
             return True
@@ -243,9 +247,9 @@ class LegStart(object):
             go_cell = self.get_graph_cell(go_x, go_y)
             if self.match_tunnel(go_x, go_y):
                 go_cell_id = self.get_cell_id(go_x, go_y)
-                go_x, go_y = self.get_x_y(mLegStart.do_tunnel(go_cell_id))
+                go_x, go_y = self.get_x_y(self.do_tunnel(go_cell_id))
             if self.match_wormhole(go_x, go_y):
-                go_x, go_y = self.get_x_y(mLegStart.do_wormhole(go_cell))
+                go_x, go_y = self.get_x_y(self.do_wormhole(go_cell))
             return go_x, go_y
 
         # 获取下一步移动的位置，仅判断是不是合法
@@ -272,6 +276,7 @@ class LegStart(object):
 
                 ucell = self.get_cell_id(x, y)
                 next_points = get_next_one_points(x, y)
+
                 for mv, nx, ny in next_points:
                     vcell = self.get_cell_id(nx, ny)
 

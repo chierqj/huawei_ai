@@ -28,6 +28,8 @@ class Player(object):
         # 丢失视野连续多少回合
         self.lost_vision_num = 0
 
+        self.travel_point = None
+
 
 
 mPlayers = dict()
