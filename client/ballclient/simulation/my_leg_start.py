@@ -196,7 +196,8 @@ class LegStart(object):
 
     # 预处理所有的传送带
     def init_tunnel_go(self):
-        for tunnel in self.msg['msg_data']['map']['tunnel']:
+        tunnels = self.msg["msg_data"]["map"].get("tunnel", [])
+        for tunnel in tunnels:
             px, py = tunnel['x'], tunnel['y']
             u = self.get_cell_id(px, py)
             while True:
@@ -376,12 +377,15 @@ class LegStart(object):
             else:
                 return "-1"
         self.graph = [['.'] * self.width for _ in range(self.height)]
-        for meteor in self.msg['msg_data']['map']['meteor']:
+        meteors = self.msg['msg_data']['map'].get("meteor", [])
+        for meteor in meteors:
             self.graph[meteor['y']][meteor['x']] = '#'
-        for tunnel in self.msg['msg_data']['map']['tunnel']:
+        tunnels = self.msg['msg_data']['map'].get("tunnel", [])
+        for tunnel in tunnels:
             self.graph[tunnel['y']][tunnel['x']
                                     ] = get_tunnel_label(tunnel["direction"])
-        for wormhole in self.msg['msg_data']['map']['wormhole']:
+        wormholes = self.msg['msg_data']['map'].get("wormhole", [])
+        for wormhole in wormholes:
             self.graph[wormhole['y']][wormhole['x']] = wormhole["name"]
             self.wormhole[wormhole['name']] = (wormhole['x'], wormhole['y'])
 
