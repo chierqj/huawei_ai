@@ -306,7 +306,10 @@ class DoBeat(Action):
                     continue
                 if step > max_step or (step == max_step and count > max_count):
                     max_step, max_count, ret_move = step, count, move
-        player.move = ret_move
+        if ret_move == None:
+            player.move = ""
+        else:
+            player.move = ret_move
         self.add_action(player)
 
         self.record_detial(player, "逃跑")
