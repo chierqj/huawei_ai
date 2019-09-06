@@ -29,21 +29,37 @@ class DoThink(Action):
         if self.grab_player != None and self.grab_player.lost_vision_num <= self.LIMIT_LOST_VISION:
             return
 
-        ret_key = None
+        def get_dis(x, y):
+            ret_dis = None
+            for k, player in mPlayers.iteritems():
+                if player.sleep == True:
+                    continue
+                dis = mLegStart.get_short_length(player.x, player.y, x, y)
+                if ret_dis == None or dis < ret_dis:
+                    ret_dis = dis
+            return ret_dis
+
+        # ret_key = None
+        ret_key1, ret_dis1 = None, None
+        ret_key2, ret_dis2 = None, None
         for k, enemy in othPlayers.iteritems():
-            # if enemy.score <= 5:
-            #     continue
             if enemy.visiable == True:
-                self.grab_player = enemy
-                return
+                dis = get_dis(enemy.x, enemy.y)
+                if ret_dis1 == None or dis < ret_dis1:
+                    ret_dis1, ret_key1 = dis, k
             if enemy.predict_x == None:
                 continue
             if enemy.lost_vision_num <= self.LIMIT_LOST_VISION:
-                ret_key = k
-        if ret_key == None:
-            self.grab_player = None
-        else:
-            self.grab_player = othPlayers[ret_key]
+                dis = get_dis(enemy.predict_x, enemy.predict_y)
+                if ret_dis2 == None or dis < ret_dis2:
+                    ret_dis2, ret_key2 = dis, k
+        if ret_key1 != None:
+            self.grab_player = othPlayers[ret_key1]
+            return
+        if ret_key2 != None:
+            self.grab_player = othPlayers[ret_key2]
+            return
+        self.grab_player = None
 
     '''
     判断相关
@@ -117,10 +133,123 @@ class DoThink(Action):
             bfs(player)
             self.record_detial(player, "逼近")
 
-        # dis, move, cell = self.get_min_dis(
-        #     player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
-        # player.move = move
-        # self.record_detial(player, "逼近")
+    # def just_eat(self):
+    #     uid = mLegStart.get_cell_id(
+    #         self.grab_player.predict_x, self.grab_player.predict_y)
+    #     sons = mLegStart.SONS.get(uid, None)
+    #     if True == self.error_no_sons(sons, uid):
+    #         return False
+
+    #     def have_mplayer(x, y):
+    #         for k, player in mPlayers.iteritems():
+    #             if player.sleep == True:
+    #                 continue
+    #             dis1 = mLegStart.get_short_length(player.x, player.y, x, y)
+    #             dis2 = mLegStart.get_short_length(x, y, player.x, player.y)
+    #             if dis1 <= 1 and dis2 <= 1:
+    #                 return True
+    #             # if player.x == x and player.y == y:
+    #                 # return True
+    #         return False
+
+    #     for mv, nx, ny in sons:
+    #         if False == have_mplayer(nx, ny):
+    #             return False
+    #     for k, player in mPlayers.iteritems():
+    #         if player.sleep == True:
+    #             continue
+    #         dis, move, cell = self.get_min_dis(
+    #             player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
+    #         # if dis <= 1:
+    #         player.move = move
+    #         # break
+    #     return True
+
+    # def get_close(self, players):
+    #     if len(players) == 0:
+    #         return
+
+    #     import Queue
+    #     q = Queue.Queue()
+    #     vis = set()
+    #     record_action = dict()
+
+    #     grab_label, mlabel = 0, 1
+    #     grab_start = mLegStart.get_cell_id(
+    #         self.grab_player.predict_x, self.grab_player.predict_y)
+    #     vis.add((grab_start, grab_label))
+    #     q.put((-1, "", grab_start, 0, grab_label))
+
+    #     used_pid = set()
+
+    #     tol_can_use = 0
+
+    #     for player in players:
+    #         if player.sleep == True:
+    #             continue
+    #         start = mLegStart.get_cell_id(player.x, player.y)
+    #         vis.add((start, mlabel))
+    #         record_action[start] = {"pid": player.id, "move": ""}
+    #         q.put((player.id, "", start, 0, mlabel))
+    #         tol_can_use += 1
+
+    #     mLogger.info(record_action)
+
+    #     while False == q.empty():
+    #         pid, umove, uid, ustep, ulabel = q.get()
+    #         if pid in used_pid:
+    #             continue
+    #         # if len(used_pid) == tol_can_use - 1:
+    #         #     break
+
+    #         sons = mLegStart.SONS.get(uid, None)
+    #         if True == self.error_no_sons(sons, uid):
+    #             continue
+    #         for mv, nx, ny in sons:
+    #             if ustep == 0:
+    #                 umove = mv
+
+    #             vid = mLegStart.get_cell_id(nx, ny)
+    #             grab_pair = (vid, grab_label)
+    #             mpair = (vid, mlabel)
+
+    #             if ulabel == grab_label:
+    #                 if grab_pair in vis:
+    #                     continue
+    #                 if mpair in vis:
+    #                     mpid = record_action[vid]["pid"]
+    #                     if mpid in used_pid:
+    #                         continue
+    #                     move = record_action[vid]["move"]
+    #                     mPlayers[mpid].move = move
+    #                     used_pid.add(mpid)
+    #                     mLogger.info("[敌人撞墙: ({}, {})] [player: {}; point: ({}, {}); move: {}]".format(
+    #                         nx, ny, mpid, mPlayers[mpid].x, mPlayers[mpid].y, mPlayers[mpid].move
+    #                     ))
+    #                     continue
+    #                 vis.add(grab_pair)
+    #                 q.put((pid, umove, vid, ustep + 1, ulabel))
+    #             else:
+    #                 if mpair in vis:
+    #                     continue
+    #                 if grab_pair in vis and pid not in used_pid:
+    #                     mPlayers[pid].move = umove
+    #                     used_pid.add(pid)
+    #                     mLogger.info("[我要围捕: ({}, {})] [player: {}; point: ({}, {}); move: {}]".format(
+    #                         nx, ny, pid, mPlayers[pid].x, mPlayers[pid].y, mPlayers[pid].move
+    #                     ))
+    #                 record_action[vid] = {"pid": pid, "move": umove}
+    #                 vis.add(mpair)
+    #                 q.put((pid, umove, vid, ustep + 1, mlabel))
+    #     for k, player in mPlayers.iteritems():
+    #         if player.sleep == True:
+    #             continue
+    #         if player.id in used_pid:
+    #             continue
+    #         dis, move, cell = self.get_min_dis(
+    #             player.x, player.y, self.grab_player.predict_x, self.grab_player.predict_y)
+    #         player.move = move
+    #         self.record_detial(player, "跳出算法")
 
     # 敌人到px, px 走了step步
     def try_close(self, player, px, py, step):
@@ -242,9 +371,12 @@ class DoThink(Action):
             if True == self.eat_power(player, used_power):
                 continue
             players.append(player)
+        if len(players) == 0:
+            return
 
         all_enums = self.get_all_enums(players)
         max_count, ret_enum = None, None
+
         for enum in all_enums:
             vision_count = set()
             for pid, em, ex, ey in enum:
@@ -260,8 +392,12 @@ class DoThink(Action):
                         cell = mLegStart.get_cell_id(i, j)
                         vision_count.add(cell)
 
-            if max_count == None or len(vision_count) > max_count:
-                max_count, ret_enum = len(vision_count), enum
+                if max_count == None or len(vision_count) > max_count:
+                    max_count, ret_enum = len(vision_count), enum
+
+        if ret_enum == None:
+            mLogger.warning("[没有枚举的情况]")
+            return
 
         mLogger.info("[max_count: {}; ret_enum: {}".format(
             max_count, ret_enum))
@@ -290,6 +426,7 @@ class DoThink(Action):
                 self.grab_player.predict_y,
                 self.grab_player.lost_vision_num
             ))
+            # if False == self.just_eat():
             self.start_grab()
         else:
             mLogger.info("没有敌人，开始巡航......")

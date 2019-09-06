@@ -8,211 +8,489 @@ from ballclient.simulation.my_player import mPlayers, othPlayers, Player
 from ballclient.simulation.my_power import Power
 import random
 import math
+import Queue
 from ballclient.simulation.my_action import Action
 
 
 class DoBeat(Action):
     def __init__(self):
         super(DoBeat, self).__init__()
+        self.HAVE_RET_POINT = set()
 
     def init(self):
-        self.HAVE_RET_POINT.clear()
+        self.HAVE_RET_POINT = set()
 
-    def match_escape(self, player):
-        for k, oth_player in othPlayers.iteritems():
-            if oth_player.predict_x == None:
+    '''
+    match做条件判断相关
+    1. 判断player是否需要逃跑
+    2. 判断(x, y)是否在敌人的视野中
+    3. 判断(x, y)是否在我的视野中
+    4. 判断(x, y)的连接父节点有没有我看不到的
+    5. 判断(x, y)是不是敌人比我快
+    6. 判断(x, y)是不是虫洞，是虫洞看看敌人是不是比我快
+    7. 判断(x, y)是不是虫洞，是虫洞看看是不是在敌人的视野中
+    '''
+
+    def match_need_escape(self, player):
+        for k, enemy in othPlayers.iteritems():
+            if enemy.visiable == False:
                 continue
-            if oth_player.visiable == False and oth_player.lost_vision_num > self.LIMIT_LOST_VISION:
+            if self.judge_in_vision(enemy.x, enemy.y, player.x, player.y):
+                return True
+            # dis = mLegStart.get_short_length(
+            #     enemy.x, enemy.y, player.x, player.y)
+            # if dis <= 5:
+            #     return True
+        return False
+
+    def match_enemy_can_say(self, x, y):
+        for k, enemy in othPlayers.iteritems():
+            if enemy.visiable == False:
                 continue
-            dis = mLegStart.get_short_length(
-                oth_player.predict_x, oth_player.predict_y, player.x, player.y)
-            if dis <= 5:
+            if True == self.judge_in_vision(enemy.x, enemy.y, x, y):
                 return True
         return False
 
-    def escape(self, player):
-        ans_move = ""
+    def match_self_can_say(self, x, y):
+        for k, mfish in mPlayers.iteritems():
+            if mfish.sleep == True:
+                continue
+            if True == self.judge_in_vision(mfish.x, mfish.y, x, y):
+                return True
+        return False
 
-        def bfs():
-            import Queue
+    def match_father_self_can_not_say(self, x, y):
+        uid = mLegStart.get_cell_id(x, y)
+        fathers = mLegStart.FATHER.get(uid, None)
+        if None == fathers:
+            mLogger.warning("[没有父亲] [uid: {}; point: ({}, {})]".format(
+                uid, x, y
+            ))
+            return False
+        for fax, fay in fathers:
+            if False == self.match_self_can_say(fax, fay):
+                return True
+        return False
+
+    def match_enemy_fast(self, x, y, step):
+        for k, enemy in othPlayers.iteritems():
+            if enemy.visiable == False:
+                continue
+            dis = mLegStart.get_short_length(enemy.x, enemy.y, x, y)
+            if dis <= step:
+                return True
+        return False
+
+    def match_wormhole_enemy_fast(self, x, y, step):
+        if False == mLegStart.match_wormhole(x, y):
+            return False
+        alp = mLegStart.get_graph_cell(x, y)
+        alpid = mLegStart.do_wormhole(alp)
+        ux, uy = mLegStart.get_x_y(alpid)
+        return self.match_enemy_fast(ux, uy, step)
+
+    def match_wormhole_enemy_can_say(self, x, y):
+        if False == mLegStart.match_wormhole(x, y):
+            return False
+        alp = mLegStart.get_graph_cell(x, y)
+        alpid = mLegStart.do_wormhole(alp)
+        ux, uy = mLegStart.get_x_y(alpid)
+        return self.match_enemy_can_say(ux, uy)
+
+    '''
+    1. 判断去(x, y)这个点会不会突然暴露视野
+        a. 我看不到
+        b. 敌人能看到
+        c. 虫洞判断
+    2. 判断去(x, y, ustep)这个点敌人会不会比我快
+        a. 敌人原汁原味比你快
+        b. 钻虫洞判断两个位置
+    '''
+
+    def judge_suddenly_dead(self, x, y):
+        if False == self.match_self_can_say(x, y):
+            return True
+        if True == self.match_father_self_can_not_say(x, y):
+            return True
+        if True == self.match_wormhole_enemy_can_say(x, y):
+            return True
+        return False
+
+    def judge_enemy_fast(self, x, y, step):
+        if True == self.match_enemy_fast(x, y, step):
+            return True
+        if True == self.match_wormhole_enemy_fast(x, y, step - 1):
+            return True
+        return False
+
+    '''
+    逃跑
+    '''
+
+    # 先看看能不能逃脱视野追踪
+    def pre_escape_vision(self, player):
+        uid = mLegStart.get_cell_id(player.x, player.y)
+        sons = mLegStart.SONS.get(uid, None)
+        if True == self.error_no_sons(sons, uid):
+            return False
+        for mv, nx, ny in sons:
+            vid = mLegStart.get_cell_id(nx, ny)
+            if False == self.match_self_can_say(nx, ny):
+                continue
+            if True == self.match_father_self_can_not_say(nx, ny):
+                continue
+            if True == self.match_wormhole_enemy_can_say(nx, ny):
+                continue
+            if True == self.match_enemy_can_say(nx, ny):
+                continue
+            player.move = mv
+            self.record_detial(player, "通过视野逃跑")
+            return True
+        return False
+
+    def get_sorted_sons(self, sons):
+        def cmp(s1, s2):
+            if False == self.match_enemy_can_say(s1[1], s1[2]):
+                return -1
+            if False == self.match_enemy_can_say(s2[1], s2[2]):
+                return 1
+            return 0
+        import copy
+        new_sons = copy.deepcopy(sons)
+        new_sons = sorted(new_sons, cmp)
+        return new_sons
+
+    def get_can_say_enemy(self):
+        can_say_enemy_num = 0
+        for k, enemy in othPlayers.iteritems():
+            if enemy.visiable == False:
+                continue
+            can_say_enemy_num += 1
+        return can_say_enemy_num
+
+    def add_action(self, player):
+        uid = mLegStart.get_cell_id(player.x, player.y)
+        sons = mLegStart.SONS.get(uid, None)
+        if True == self.error_no_sons(sons, uid):
+            return
+        for mv, nx, ny in sons:
+            if mv == player.move:
+                vid = mLegStart.get_cell_id(nx, ny)
+                self.HAVE_RET_POINT.add(vid)
+                return
+
+    def escape(self, player):
+        # if True == self.pre_escape_vision(player):
+        #     return
+
+        move_distance = dict()
+        move_distance[""] = dict()
+        move_distance["left"] = dict()
+        move_distance["right"] = dict()
+        move_distance["up"] = dict()
+        move_distance["down"] = dict()
+
+        mLogger.info("******************************************************")
+        can_say_enemy_num = self.get_can_say_enemy()
+
+        def bfs1():
+            mLogger.info("[开始 bfs1]")
             q = Queue.Queue()
             vis = set()
-
-            cell = mLegStart.get_cell_id(player.x, player.y)
-            q.put((0, "", player.x, player.y))
-            vis.add(cell)
-
-            def judge_enemy(x, y, c_step):
-                for k, oth_player in othPlayers.iteritems():
-                    if oth_player.predict_x == None:
-                        continue
-                    if oth_player.visiable == False and oth_player.lost_vision_num > self.LIMIT_LOST_VISION:
-                        continue
-                    dis = mLegStart.get_short_length(
-                        oth_player.predict_x, oth_player.predict_y, x, y)
-                    if dis <= c_step:
-                        return False
-                return True
-
+            start = mLegStart.get_cell_id(player.x, player.y)
+            q.put(("", start, 0))
+            vis.add(start)
+            flag = False
             while False == q.empty():
-                step, move, ux, uy = q.get()
-                player.move = move
-                next_one_points = self.get_next_one_points(ux, uy)
+                move, uid, ustep = q.get()
+                errx, erry = mLegStart.get_x_y(uid)
+                # mLogger.info("[ustep: {}; point: ({}, {})]".format(ustep, errx, erry))
+                if ustep >= 7:
+                    break
+                if ustep >= 1:
+                    flag = True
+                st = move_distance[move].get(ustep, [])
+                st.append((errx, erry))
+                move_distance[move][ustep] = st
 
-                for mv, nx, ny in next_one_points:
-                    v_cell = mLegStart.get_cell_id(nx, ny)
-                    if v_cell in vis:
+                sons = mLegStart.SONS.get(uid, None)
+                if sons == None:
+                    mLogger.warning("[没有儿子] [uid: {}; point: ({}, {})]".format(
+                        uid, errx, erry
+                    ))
+                    continue
+                '''
+                1. 敌人比我快，我就不走 (走过去的nx, ny可能是虫洞)
+                2. 视野看不到我就不走
+                3. 要走的点的父亲看不到，我就不走
+                '''
+                sort_sons = self.get_sorted_sons(sons)
+                for mv, nx, ny in sort_sons:
+                    cell = mLegStart.get_cell_id(nx, ny)
+                    if cell in vis:
                         continue
-                    # if False == self.judge_in_vision(player.x, player.y, nx, ny):
-                    #     continue
-                    if step == 0:
+                    if True == self.judge_enemy_fast(nx, ny, ustep + 1):
+                        continue
+                    if ustep == 0:
+                        if cell in self.HAVE_RET_POINT:
+                            continue
+                        if can_say_enemy_num < 4:
+                            if False == self.match_self_can_say(nx, ny):
+                                continue
+                            if True == self.match_father_self_can_not_say(nx, ny):
+                                continue
+                            if True == self.match_wormhole_enemy_fast(nx, ny, ustep):
+                                continue
                         move = mv
+                    vis.add(cell)
+                    q.put((move, cell, ustep + 1))
+            return flag
 
-                    if judge_enemy(nx, ny, step + 1) == False:
+        def bfs2():
+            mLogger.info("[开始 bfs2]")
+
+            q = Queue.Queue()
+            vis = set()
+            start = mLegStart.get_cell_id(player.x, player.y)
+            q.put(("", start, 0))
+            vis.add(start)
+            while False == q.empty():
+                move, uid, ustep = q.get()
+                errx, erry = mLegStart.get_x_y(uid)
+                if ustep >= 7:
+                    break
+                st = move_distance[move].get(ustep, [])
+                st.append((errx, erry))
+                move_distance[move][ustep] = st
+
+                sons = mLegStart.SONS.get(uid, None)
+                if sons == None:
+                    mLogger.warning("[没有儿子] [uid: {}; point: ({}, {})]".format(
+                        uid, errx, erry
+                    ))
+                    continue
+                '''
+                1. 敌人比我快，我就不走 (走过去的nx, ny可能是虫洞)
+                2. 视野看不到我就不走
+                3. 要走的点的父亲看不到，我就不走
+                '''
+                for mv, nx, ny in sons:
+                    cell = mLegStart.get_cell_id(nx, ny)
+                    if cell in vis:
                         continue
+                    if True == self.judge_enemy_fast(nx, ny, ustep + 1):
+                        continue
+                    if ustep == 0:
+                        if cell in self.HAVE_RET_POINT:
+                            continue
+                        move = mv
+                    vis.add(cell)
+                    q.put((move, cell, ustep + 1))
 
-                    vis.add(v_cell)
-                    q.put((step+1, move, nx, ny))
-        bfs()
-        # player.move = ans_move
+        if False == bfs1():
+            mLogger.info("[尝试bfs1失败]")
+            move_distance = dict()
+            move_distance[""] = dict()
+            move_distance["left"] = dict()
+            move_distance["right"] = dict()
+            move_distance["up"] = dict()
+            move_distance["down"] = dict()
+            bfs2()
 
-    def do_excute(self):
-        self.update_predict()
+        max_step, max_count, ret_move = None, None, ""
+        for move, step_dict in move_distance.iteritems():
+            for step, point_ary in step_dict.iteritems():
+                count = len(point_ary)
+                if max_step == None:
+                    max_step, max_count, ret_move = step, count, move
+                    continue
+                if step > max_step or (step == max_step and count > max_count):
+                    max_step, max_count, ret_move = step, count, move
+        if ret_move == None:
+            player.move = ""
+        else:
+            player.move = ret_move
+        self.add_action(player)
+
+        self.record_detial(player, "逃跑")
+        d = ["", "up", "down", "left", "right"]
+        info = "各个方向位置信息\n"
+        for it in d:
+            info += "---------------- {} --------------\n".format(it)
+            for k, v in move_distance[it].iteritems():
+                info += "[dis: {}] [num: {}] [point: {}]\n".format(
+                    k, len(v), v)
+        mLogger.info(info)
+
+    '''
+    不用逃跑
+    1. 吃能量，并且能量在我的视野范围内
+    2. 越远越好
+    '''
+
+    def find_power(self, player, used_power):
+        powers = self.mRoundObj.msg['msg_data'].get('power', None)
+        if None == powers:
+            return False
+        power_area = set()
+        for power in powers:
+            cell = mLegStart.get_cell_id(power['x'], power['y'])
+            if cell in used_power:
+                continue
+            if False == self.judge_in_vision(player.x, player.y, power['x'], power['y']):
+                continue
+            power_area.add(cell)
+
+        can_say_enemy_num = self.get_can_say_enemy()
+
+        q = Queue.Queue()
+        vis = set()
+        start = mLegStart.get_cell_id(player.x, player.y)
+        q.put(("", start, 0))
+        vis.add(start)
+
+        move_distance = dict()
+        while False == q.empty():
+            move, uid, ustep = q.get()
+            errx, erry = mLegStart.get_x_y(uid)
+            if uid in power_area:
+                player.move = move
+                self.add_action(player)
+                used_power.add(uid)
+                self.record_detial(player, "能量")
+                return True
+            sons = mLegStart.SONS.get(uid, None)
+            if True == self.error_no_sons(sons, uid):
+                continue
+            move_distance[move] = (errx, erry, ustep)
+            '''
+            1. 敌人能看到，我不走 (注意虫洞)
+            2. 我自己都看不到，我不走
+            3. 要走的点的父亲看不到，我不走
+            '''
+            for mv, nx, ny in sons:
+                cell = mLegStart.get_cell_id(nx, ny)
+                if cell in vis:
+                    continue
+                if ustep == 0:
+                    if cell in self.HAVE_RET_POINT:
+                        continue
+                    if True == self.judge_suddenly_dead(nx, ny) and can_say_enemy_num < 4:
+                        continue
+                    if True == self.match_enemy_can_say(nx, ny) and can_say_enemy_num < 4:
+                        continue
+                    move = mv
+                vis.add(cell)
+                q.put((move, cell, ustep + 1))
+        return False
+
+    def expand_vision(self):
+        have_vision_count = set()
+
+        def cal(player):
+            uid = mLegStart.get_cell_id(player.x, player.y)
+            sons = mLegStart.SONS.get(uid, None)
+            if True == self.error_no_sons(sons, uid):
+                return
+            for mv, nx, ny in sons:
+                if mv == player.move:
+                    width, height = mLegStart.width, mLegStart.height
+                    vision = mLegStart.msg['msg_data']['map']['vision']
+                    x1, y1 = max(0, nx - vision), max(0, ny - vision)
+                    x2 = min(width - 1, nx + vision)
+                    y2 = min(height - 1, ny + vision)
+
+                    for i in range(x1, x2 + 1):
+                        for j in range(y1, y2 + 1):
+                            cell = mLegStart.get_cell_id(i, j)
+                            have_vision_count.add(cell)
+                    return
+
         players = []
+        used_power = set()
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
-
-            # round_id = self.mRoundObj.msg['msg_data']['round_id']
-            # if round_id > 145 and round_id < 150:
-            #     player.move = ""
-            #     continue
-
-            if self.match_escape(player) == True:
-                self.escape(player)
+            if True == self.match_need_escape(player):
+                cal(player)
+                continue
+            if True == self.find_power(player, used_power):
+                cal(player)
                 continue
             players.append(player)
-            # self.travel(player)
-        self.eat_power_or_travel(players)
 
-    # # 能量值奖励评分
-    # def reward_power(self, player, move, px, py):
-    #     max_weight, sum_weight = 0, 0
-    #     for k, power in self.mRoundObj.POWER_WAIT_SET.iteritems():
-    #         # 我到金币的
-    #         dis = mLegStart.get_short_length(px, py, power.x, power.y)
-    #         weight = float("%.5f" % (1.0 / math.exp(dis)))
+        can_say_enemy_num = self.get_can_say_enemy()
 
-    #         if power.visiable == False:
-    #             dis = config.POWER_ALPHA * dis + config.POWER_BELAT * power.last_appear_dis
-    #             weight = 0.0 if dis == 0 else float(
-    #                 "%.5f" % (1.0 / math.exp(dis)))
+        all_enums = self.get_all_enums(players)
+        max_count, ret_enum = None, None
+        for enum in all_enums:
+            import copy
+            vision_count = copy.deepcopy(have_vision_count)
+            flag = True
+            for pid, em, ex, ey in enum:
+                eid = mLegStart.get_cell_id(ex, ey)
+                if eid in self.HAVE_RET_POINT:
+                    flag = False
+                    break
+                if True == self.judge_suddenly_dead(ex, ey) and can_say_enemy_num < 4:
+                    flag = False
+                    break
+                if True == self.match_enemy_can_say(ex, ey) and can_say_enemy_num < 4:
+                    flag = False
+                    break
+                width, height = mLegStart.width, mLegStart.height
+                vision = mLegStart.msg['msg_data']['map']['vision']
+                x1, y1 = max(0, ex - vision), max(0, ey - vision)
+                x2 = min(width - 1, ex + vision)
+                y2 = min(height - 1, ey + vision)
 
-    #         max_weight = max(max_weight, weight)
-    #         sum_weight += weight
+                for i in range(x1, x2 + 1):
+                    for j in range(y1, y2 + 1):
+                        cell = mLegStart.get_cell_id(i, j)
+                        vision_count.add(cell)
+            if flag == False:
+                # mLogger.warning("[有人可能会暴露视野]")
+                continue
+            if max_count == None or len(vision_count) >= max_count:
+                max_count, ret_enum = len(vision_count), enum
 
-    #         if config.record_weight == True:
-    #             mLogger.info("{} [my_fish: {}; point: ({}, {});] [power_value: {}; point: ({}, {})] [dis: {}] [weight: {:.5f}]".format(
-    #                 move, player.id, player.x, player.y, power.point, power.x, power.y, dis, weight))
+        if ret_enum == None:
+            max_count, ret_enum = None, None
+            for enum in all_enums:
+                import copy
+                vision_count = copy.deepcopy(have_vision_count)
+                for pid, em, ex, ey in enum:
+                    width, height = mLegStart.width, mLegStart.height
+                    vision = mLegStart.msg['msg_data']['map']['vision']
+                    x1, y1 = max(0, ex - vision), max(0, ey - vision)
+                    x2 = min(width - 1, ex + vision)
+                    y2 = min(height - 1, ey + vision)
 
-    #     max_weight *= config.BEAT_POWER_WEIGHT
-    #     sum_weight *= config.BEAT_POWER_WEIGHT
+                    for i in range(x1, x2 + 1):
+                        for j in range(y1, y2 + 1):
+                            cell = mLegStart.get_cell_id(i, j)
+                            vision_count.add(cell)
+                if max_count == None or len(vision_count) >= max_count:
+                    max_count, ret_enum = len(vision_count), enum
 
-    #     nweight = self.weight_moves.get(move, 0)
-    #     self.weight_moves[move] = float("%.5f" % (nweight + sum_weight))
+        if ret_enum == None:
+            mLogger.warning("[没有enum]")
+            return
 
-    # # 奖励评分
-    # def reward_weight(self, player, next_one_points):
-    #     for move, go_x, go_y in next_one_points:
-    #         self.reward_power(player, move, go_x, go_y)
+        mLogger.info("[max_count: {}; ret_enum: {}]".format(
+            max_count, ret_enum))
+        for pid, em, ex, ey in ret_enum:
+            mPlayers[pid].move = em
+            self.add_action(mPlayers[pid])
 
-    # # 访问过的节点的惩罚评分，防止逛街
-    # def punish_vis_point(self, player, move, px, py):
-    #     cell_id = mLegStart.get_cell_id(px, py)
-    #     if cell_id in player.vis_point_count:
-    #         nweight = self.weight_moves.get(move, 0)
+    def do_excute(self):
+        self.HAVE_RET_POINT.clear()
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            if True == self.match_need_escape(player):
+                self.escape(player)
+        self.expand_vision()
 
-    #         self.weight_moves[move] = float(
-    #             "%.5f" % (nweight - config.CELL_WEIGHT))
 
-    #         if config.record_weight == True:
-    #             mLogger.info("{} [my_fish: {}; point: ({}, {});] [vis_cell_point: ({}, {})] [weight: {:.5f}]".format(
-    #                 move, player.id, player.x, player.y, px, py, config.CELL_WEIGHT))
-
-    # # 敌人的惩罚评分
-    # def punish_player(self, player, move, px, py):
-    #     max_weight, sum_weight = 0, 0
-    #     flag = False
-    #     for k, oth_player in othPlayers.iteritems():
-    #         if oth_player.visiable == False:
-    #             continue
-    #         # if False == self.judge_in_vision(oth_player.x, oth_player.y, player.x, player.y):
-    #         #     continue
-    #         flag = True
-    #         # 敌人到我的，敌人要吃我
-    #         dis = mLegStart.get_short_length(
-    #             oth_player.x, oth_player.y, px, py)
-    #         weight = float("%.5f" % (1.0 / math.exp(dis)))
-
-    #         max_weight = max(max_weight, weight)
-    #         sum_weight += weight
-
-    #         if config.record_weight == True:
-    #             mLogger.info("{} [my_fish: {}; point: ({}, {});] [othfish: {}; point: ({}, {})] [dis: {}] [weight: {:.5f}]".format(
-    #                 move, player.id, player.x, player.y, oth_player.id, oth_player.x, oth_player.y, dis, weight))
-
-    #     max_weight *= config.BEAT_PLAYER_WEIGHT
-    #     sum_weight *= config.BEAT_PLAYER_WEIGHT
-
-    #     nweight = self.weight_moves.get(move, 0)
-    #     self.weight_moves[move] = float("%.5f" % (nweight + sum_weight))
-
-    # # 惩罚评分
-    # def punish_weight(self, player, next_one_points):
-    #     for move, go_x, go_y in next_one_points:
-    #         self.punish_player(player, move, go_x, go_y)
-    #         self.punish_vis_point(player, move, go_x, go_y)
-
-    # def select_best_move(self):
-    #     max_weight, ret_move = None, None
-    #     for move, weight in self.weight_moves.iteritems():
-    #         if max_weight == None or weight > max_weight:
-    #             max_weight, ret_move = weight, move
-    #     return ret_move
-
-    # # 入口调用
-    # def do_excute(self):
-    #     self.update_predict()
-    #     vis_point = set()
-    #     for k, player in mPlayers.iteritems():
-    #         if player.sleep == True:
-    #             continue
-    #         # if False == self.match_escape(player):
-    #         #     self.travel(player)
-    #         #     continue
-    #         round_id = self.mRoundObj.msg['msg_data']['round_id']
-    #         if round_id > 145 and round_id <= 150:
-    #             player.move = ""
-    #             self.record_detial(player)
-    #             continue
-
-    #         next_one_points = self.get_next_one_points(
-    #             player.x, player.y, vis_point)
-    #         if len(next_one_points) == 0:
-    #             player.move = ""
-    #             continue
-
-    #         self.weight_moves.clear()
-    #         self.reward_weight(player, next_one_points)
-    #         self.punish_weight(player, next_one_points)
-
-    #         ret_move = self.select_best_move()
-    #         player.move = ret_move
-
-    #         ret_x, ret_y = self.mRoundObj.real_go_point(
-    #             player.x, player.y, ret_move)
-    #         ret_cell_id = mLegStart.get_cell_id(ret_x, ret_y)
-    #         vis_point.add(ret_cell_id)
-
-    #         self.record_detial(player)
 mDoBeat = DoBeat()

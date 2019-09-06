@@ -14,14 +14,21 @@ class GameOver(object):
     def excute(self, msg):
         self.initialize_msg(msg)
         for key, point in mLegEnd.tolPoint.iteritems():
-            # team = "我方" if key == str(config.team_id) else "敌方"
-            # print("[Team: {}, 上半场: {}, 下半场: {}, 总分: {}]".format(
-            #     team, point[0], point[1], point[0] + point[1]))
-
             team = "My" if key == str(config.team_id) else "Oth"
             print("[Team: {}, First: {}, Second: {}, Total: {}]".format(
                 team, point[0], point[1], point[0] + point[1]))
+
+        print("")
+        tol_eated_count, tol_eated_score = 0, 0
+        for k, v in mLegEnd.eated_info.iteritems():
+            print("[player: {}, tol_sleep: {}, eated: {}, sleep_lost_score: {}, lost_score: {}]".format(
+                k, v['count'], v['count'] / 3, v['score'], v['score'] / 3
+            ))
+            tol_eated_count += v['count'] / 3
+            tol_eated_score += v['score'] / 3
+        print("[tol_eated: {}, tol_lost_score: {}]".format(tol_eated_count, tol_eated_score))
         mLegEnd.tolPoint.clear()
+        mLegEnd.eated_info.clear()
 
 
 mGameOver = GameOver()
