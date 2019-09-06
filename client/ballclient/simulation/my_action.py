@@ -43,16 +43,24 @@ class Action(object):
         return True
 
     # 获取players的所有可能的情况
-    def get_all_enums(self, next_one_points):
+    def get_all_enums(self, players):
         result = []
-        up = len(next_one_points)
+        up = len(players)
 
         def dfs(dep, enum=[]):
             if dep == up:
                 import copy
                 result.append(copy.deepcopy(enum))
                 return
-            for pid, mv, nx, ny in next_one_points[dep]:
+
+            pid = players[dep].id
+            uid = mLegStart.get_cell_id(players[dep].x, players[dep].y)
+            sons = mLegStart.SONS.get(uid, None)
+
+            if True == self.error_no_sons(sons, uid):
+                return
+
+            for mv, nx, ny in sons:
                 dfs(dep + 1, enum + [(pid, mv, nx, ny)])
         dfs(0)
 
@@ -172,6 +180,22 @@ class Action(object):
                 self.USED_VISION_POINT.add(player.travel_point)
             else:
                 find_travel_point()
+
+    # 清空掉追击固定视野
+    def init_vision_point(self):
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            player.travel_point = None
+        self.USED_VISION_POINT.clear()
+
+    def error_no_sons(self, sons, uid):
+        ux, uy = mLegStart.get_x_y(uid)
+        if sons == None:
+            mLogger.warning(
+                "[没有儿子] [uid: {}; point: ({}, {})]".format(uid, ux, uy))
+            return True
+        return False
 
     # 入口
     def excute(self, mRoundObj):

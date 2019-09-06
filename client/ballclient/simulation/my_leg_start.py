@@ -55,6 +55,8 @@ class LegStart(object):
 
     # 暴露给其它地方用的获取两个点之间的最短路径，再config配置中需要打开
     def get_short_length(self, x1, y1, x2, y2):
+        if x1 == x2 and y1 == y2:
+            return 0
         if False == self.match_border(x1, y1):
             mLogger.warning("start_point: ({}, {})越界了".format(x1, y1))
             return None

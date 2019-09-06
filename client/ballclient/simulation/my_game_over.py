@@ -18,16 +18,17 @@ class GameOver(object):
             print("[Team: {}, First: {}, Second: {}, Total: {}]".format(
                 team, point[0], point[1], point[0] + point[1]))
 
-        print("--------------------------------------")
+        print("")
         tol_eated_count, tol_eated_score = 0, 0
         for k, v in mLegEnd.eated_info.iteritems():
-            print("[玩家: {}, 睡眠总次数: {}, 被吃了: {}, 睡眠丢分: {}, 丢分: {}]".format(
+            print("[player: {}, tol_sleep: {}, eated: {}, sleep_lost_score: {}, lost_score: {}]".format(
                 k, v['count'], v['count'] / 3, v['score'], v['score'] / 3
             ))
             tol_eated_count += v['count'] / 3
             tol_eated_score += v['score'] / 3
-        print("[被吃合计: {}, 丢分合计: {}]".format(tol_eated_count, tol_eated_score))
+        print("[tol_eated: {}, tol_lost_score: {}]".format(tol_eated_count, tol_eated_score))
         mLegEnd.tolPoint.clear()
+        mLegEnd.eated_info.clear()
 
 
 mGameOver = GameOver()

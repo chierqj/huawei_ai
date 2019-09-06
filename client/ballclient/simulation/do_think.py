@@ -45,14 +45,6 @@ class DoThink(Action):
         else:
             self.grab_player = othPlayers[ret_key]
 
-    def error_no_sons(self, sons, uid):
-        ux, uy = mLegStart.get_x_y(uid)
-        if sons == None:
-            mLogger.warning(
-                "[没有儿子] [uid: {}; point: ({}, {})]".format(uid, ux, uy))
-            return True
-        return False
-
     '''
     判断相关
     1. 判断(x, y, step)我是不是更快
@@ -157,8 +149,8 @@ class DoThink(Action):
             if ret_dis == None or dis < ret_dis:
                 ret_dis, ret_key, ret_move = dis, k, move
             num += 1
-        # if num <= 1:
-        #     return False
+        if num <= 1:
+            return False
 
         if ret_key == None:
             return False
@@ -219,12 +211,76 @@ class DoThink(Action):
             players.append(player)
         self.get_close(players)
 
+    def eat_power(self, player, used_power):
+        powers = self.mRoundObj.msg['msg_data'].get('power', None)
+        if None == powers:
+            return False
+
+        ret_dis, ret_move, ret_id = None, None, None
+        for power in powers:
+            if False == self.judge_in_vision(player.x, player.y, power['x'], power['y']):
+                continue
+            power_id = mLegStart.get_cell_id(power['x'], power['y'])
+            if power_id in used_power:
+                continue
+            dis, move, cell = self.get_min_dis(
+                player.x, player.y, power['x'], power['y'])
+            if ret_dis == None or dis < ret_dis:
+                ret_dis, ret_move, ret_id = dis, move, power_id
+        if ret_move == None:
+            return False
+        player.move = ret_move
+        used_power.add(ret_id)
+        return True
+
+    def expand_vision(self):
+        players = []
+        used_power = set()
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            if True == self.eat_power(player, used_power):
+                continue
+            players.append(player)
+
+        all_enums = self.get_all_enums(players)
+        max_count, ret_enum = None, None
+        for enum in all_enums:
+            vision_count = set()
+            for pid, em, ex, ey in enum:
+                width, height = mLegStart.width, mLegStart.height
+                vision = mLegStart.msg['msg_data']['map']['vision']
+                # vision = 10
+                x1, y1 = max(0, ex - vision), max(0, ey - vision)
+                x2 = min(width - 1, ex + vision)
+                y2 = min(height - 1, ey + vision)
+
+                for i in range(x1, x2 + 1):
+                    for j in range(y1, y2 + 1):
+                        cell = mLegStart.get_cell_id(i, j)
+                        vision_count.add(cell)
+
+            if max_count == None or len(vision_count) > max_count:
+                max_count, ret_enum = len(vision_count), enum
+
+        mLogger.info("[max_count: {}; ret_enum: {}".format(
+            max_count, ret_enum))
+        for pid, em, ex, ey in ret_enum:
+            mPlayers[pid].move = em
+
     def do_excute(self):
         self.USED_PLAYER_ID.clear()
-        self.USED_VISION_POINT.clear()
-
         self.confirm_grab_player()
-        if self.grab_player != None:
+
+        alive_num = 0
+        for k, player in mPlayers.iteritems():
+            if player.sleep == True:
+                continue
+            alive_num += 1
+
+        # 只要这回合抓鱼，就不可能巡逻。把之前的巡逻初始化掉
+        if self.grab_player != None and alive_num >= 3:
+            # self.init_vision_point()
             mLogger.info("有敌人，可以追击......")
             mLogger.info("[敌人] [player: {}; point: ({}, {}); predict: ({}, {}); lost: {}]".format(
                 self.grab_player.id,
@@ -237,8 +293,7 @@ class DoThink(Action):
             self.start_grab()
         else:
             mLogger.info("没有敌人，开始巡航......")
-            for k, player in mPlayers.iteritems():
-                self.travel(player)
+            self.expand_vision()
 
 
 mDoThink = DoThink()

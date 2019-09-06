@@ -8,7 +8,7 @@ popd
 
 
 pushd %CD%
-cd /d "client"
+cd /d "client1"
 start /min gameclient.bat 6000 127.0.0.1 6001 
 popd
 
@@ -23,7 +23,7 @@ ping -n 3 127.0.0.1>null
 
 
 pushd %CD%
-cd /d "client1"
+cd /d "client"
 start /min gameclient.bat 6666 127.0.0.1 6001 
 popd
 
