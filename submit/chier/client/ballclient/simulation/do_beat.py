@@ -87,7 +87,11 @@ class DoBeat(Action):
         alp = mLegStart.get_graph_cell(x, y)
         alpid = mLegStart.do_wormhole(alp)
         ux, uy = mLegStart.get_x_y(alpid)
-        return self.match_enemy_fast(ux, uy, step)
+        if True == self.match_enemy_fast(x, y, step):
+            return True
+        if True == self.match_enemy_fast(ux, uy, step):
+            return True
+        return False
 
     def match_wormhole_enemy_can_say(self, x, y):
         if False == mLegStart.match_wormhole(x, y):
@@ -95,7 +99,11 @@ class DoBeat(Action):
         alp = mLegStart.get_graph_cell(x, y)
         alpid = mLegStart.do_wormhole(alp)
         ux, uy = mLegStart.get_x_y(alpid)
-        return self.match_enemy_can_say(ux, uy)
+        if True == self.match_enemy_can_say(x, y):
+            return True
+        if True == self.match_enemy_can_say(ux, uy):
+            return True
+        return False
 
     '''
     1. 判断去(x, y)这个点会不会突然暴露视野
@@ -234,12 +242,12 @@ class DoBeat(Action):
                     if ustep == 0:
                         if cell in self.HAVE_RET_POINT:
                             continue
+                        if True == self.match_wormhole_enemy_fast(nx, ny, ustep + 1):
+                            continue
                         if can_say_enemy_num < 4:
                             if False == self.match_self_can_say(nx, ny):
                                 continue
                             if True == self.match_father_self_can_not_say(nx, ny):
-                                continue
-                            if True == self.match_wormhole_enemy_fast(nx, ny, ustep):
                                 continue
                         move = mv
                     vis.add(cell)
@@ -274,7 +282,8 @@ class DoBeat(Action):
                 2. 视野看不到我就不走
                 3. 要走的点的父亲看不到，我就不走
                 '''
-                for mv, nx, ny in sons:
+                sort_sons = self.get_sorted_sons(sons)
+                for mv, nx, ny in sort_sons:
                     cell = mLegStart.get_cell_id(nx, ny)
                     if cell in vis:
                         continue
@@ -385,43 +394,44 @@ class DoBeat(Action):
         return False
 
     def expand_vision(self):
-        have_vision_count = set()
-
         def cal(player):
+            if player.move == "":
+                tmp = self.get_vision_set(player.x, player.y)
+                return tmp
             uid = mLegStart.get_cell_id(player.x, player.y)
             sons = mLegStart.SONS.get(uid, None)
             if True == self.error_no_sons(sons, uid):
                 return
             for mv, nx, ny in sons:
                 if mv == player.move:
-                    width, height = mLegStart.width, mLegStart.height
-                    vision = mLegStart.msg['msg_data']['map']['vision']
-                    x1, y1 = max(0, nx - vision), max(0, ny - vision)
-                    x2 = min(width - 1, nx + vision)
-                    y2 = min(height - 1, ny + vision)
-
-                    for i in range(x1, x2 + 1):
-                        for j in range(y1, y2 + 1):
-                            cell = mLegStart.get_cell_id(i, j)
-                            have_vision_count.add(cell)
-                    return
+                    tmp = self.get_vision_set(nx, ny)
+                    return tmp
 
         players = []
         used_power = set()
+        have_vision_count = set()
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
             if True == self.match_need_escape(player):
-                cal(player)
+                tmp = cal(player)
+                have_vision_count = have_vision_count.union(tmp)
                 continue
             if True == self.find_power(player, used_power):
-                cal(player)
+                tmp = cal(player)
+                have_vision_count = have_vision_count.union(tmp)
                 continue
             players.append(player)
 
-        can_say_enemy_num = self.get_can_say_enemy()
+        if len(players) == 0:
+            mLogger.info("[没有鱼需要枚举]")
+            return
 
+        can_say_enemy_num = self.get_can_say_enemy()
         all_enums = self.get_all_enums(players)
+        now_vision_set = self.get_players_vision_set(players)
+        now_vision_set = now_vision_set.union(have_vision_count)
+        now_vision_count = len(now_vision_set)
         max_count, ret_enum = None, None
         for enum in all_enums:
             import copy
@@ -438,18 +448,9 @@ class DoBeat(Action):
                 if True == self.match_enemy_can_say(ex, ey) and can_say_enemy_num < 4:
                     flag = False
                     break
-                width, height = mLegStart.width, mLegStart.height
-                vision = mLegStart.msg['msg_data']['map']['vision']
-                x1, y1 = max(0, ex - vision), max(0, ey - vision)
-                x2 = min(width - 1, ex + vision)
-                y2 = min(height - 1, ey + vision)
-
-                for i in range(x1, x2 + 1):
-                    for j in range(y1, y2 + 1):
-                        cell = mLegStart.get_cell_id(i, j)
-                        vision_count.add(cell)
+                tmp = self.get_vision_set(ex, ey)
+                vision_count = vision_count.union(tmp)
             if flag == False:
-                # mLogger.warning("[有人可能会暴露视野]")
                 continue
             if max_count == None or len(vision_count) >= max_count:
                 max_count, ret_enum = len(vision_count), enum
@@ -460,16 +461,8 @@ class DoBeat(Action):
                 import copy
                 vision_count = copy.deepcopy(have_vision_count)
                 for pid, em, ex, ey in enum:
-                    width, height = mLegStart.width, mLegStart.height
-                    vision = mLegStart.msg['msg_data']['map']['vision']
-                    x1, y1 = max(0, ex - vision), max(0, ey - vision)
-                    x2 = min(width - 1, ex + vision)
-                    y2 = min(height - 1, ey + vision)
-
-                    for i in range(x1, x2 + 1):
-                        for j in range(y1, y2 + 1):
-                            cell = mLegStart.get_cell_id(i, j)
-                            vision_count.add(cell)
+                    tmp = self.get_vision_set(ex, ey)
+                    vision_count = vision_count.union(tmp)
                 if max_count == None or len(vision_count) >= max_count:
                     max_count, ret_enum = len(vision_count), enum
 
@@ -477,8 +470,8 @@ class DoBeat(Action):
             mLogger.warning("[没有enum]")
             return
 
-        mLogger.info("[max_count: {}; ret_enum: {}]".format(
-            max_count, ret_enum))
+        mLogger.info("[now_vision: {}; enum_max_vision: {}; ret_enum: {}".format(
+            now_vision_count, max_count, ret_enum))
         for pid, em, ex, ey in ret_enum:
             mPlayers[pid].move = em
             self.add_action(mPlayers[pid])

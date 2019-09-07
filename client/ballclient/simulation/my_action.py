@@ -197,6 +197,28 @@ class Action(object):
             return True
         return False
 
+    def get_vision_set(self, px, py):
+        width, height = mLegStart.width, mLegStart.height
+        vision = mLegStart.msg['msg_data']['map']['vision']
+        x1, y1 = max(0, px - vision), max(0, py - vision)
+        x2 = min(width - 1, px + vision)
+        y2 = min(height - 1, py + vision)
+        vision_count = set()
+        for i in range(x1, x2 + 1):
+            for j in range(y1, y2 + 1):
+                if False == mLegStart.match_border(i, j):
+                    continue
+                cell = mLegStart.get_cell_id(i, j)
+                vision_count.add(cell)
+        return vision_count
+
+    def get_players_vision_set(self, players):
+        vision_set = set()
+        for player in players:
+            tmp = self.get_vision_set(player.x, player.y)
+            vision_set = vision_set.union(tmp)
+        return vision_set
+
     # 入口
     def excute(self, mRoundObj):
         self.mRoundObj = mRoundObj

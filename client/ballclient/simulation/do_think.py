@@ -436,21 +436,27 @@ from ballclient.simulation.my_leg_end import mLegEnd
 class DoThink(Action):
     def __init__(self):
         super(DoThink, self).__init__()
-        self.LIMIT_LOST_VISION = 1
+        self.LIMIT_LOST_VISION = 2
+        self.grab_player = None
 
     def init(self):
         pass
 
+    @msimulog()
     def bfs(self, enemy):
         import Queue
         q = Queue.Queue()
         vis = set()
         record_action = dict()
         enemy_label, mlabel = 0, 1
+
         enemy_start = mLegStart.get_cell_id(enemy.predict_x, enemy.predict_y)
         vis.add((enemy_start, enemy_label))
+        record_action[enemy_start] = {"pid": enemy.id, "move": "", "step": 0}
         q.put((-1, "", enemy_start, 0, enemy_label))
+
         used_pid = set()
+        used_grab_move = set()
         tol_can_use = 0
 
         for k, player in mPlayers.iteritems():
@@ -458,20 +464,27 @@ class DoThink(Action):
                 continue
             start = mLegStart.get_cell_id(player.x, player.y)
             vis.add((start, mlabel))
-            record_action[start] = {"pid": player.id, "move": ""}
+            record_action[start] = {"pid": player.id, "move": "", "step": 0}
             q.put((player.id, "", start, 0, mlabel))
             tol_can_use += 1
 
-        mLogger.info(record_action)
+        max_step = None
+
+        ret = dict()
+        tol_dir_num = 0
+        # mLogger.info(record_action)
         while False == q.empty():
             pid, umove, uid, ustep, ulabel = q.get()
-            if ustep >= 6:
-                break
+
             if pid in used_pid:
                 continue
             sons = mLegStart.SONS.get(uid, None)
             if True == self.error_no_sons(sons, uid):
                 continue
+            if ustep == 0 and ulabel == enemy_label:
+                tol_dir_num = len(sons)
+            import random
+            random.shuffle(sons)
             for mv, nx, ny in sons:
                 if ustep == 0:
                     umove = mv
@@ -482,31 +495,68 @@ class DoThink(Action):
                 if ulabel == enemy_label:
                     if grab_pair in vis:
                         continue
-                    if mpair in vis:
+                    if mpair in vis and umove not in used_grab_move:
                         mpid = record_action[vid]["pid"]
                         if mpid in used_pid:
                             continue
                         move = record_action[vid]["move"]
-                        mPlayers[mpid].move = move
+                        # mPlayers[mpid].move = move
                         used_pid.add(mpid)
-                        mLogger.info("[敌人撞墙: ({}, {})] [player: {}; point: ({}, {}); move: {}; dis: {}]".format(
-                            nx, ny, mpid, mPlayers[mpid].x, mPlayers[mpid].y, mPlayers[mpid].move, ustep + 1
-                        ))
+                        used_grab_move.add(umove)
+                        mdis = record_action[vid]["step"]
+
+                        if max_step == None or ustep > max_step:
+                            max_step = ustep
+
+                        ret[mpid] = {
+                            "label": "dead",
+                            "my_move": move,
+                            "enemy_move": umove,
+                            "mdis": mdis,
+                            "enemy_step": ustep+1,
+                            "point": (nx, ny)
+                        }
+
+                        # mLogger.info("[敌人撞墙: ({}, {})] [player: {}; point: ({}, {}); move: {}; dis: {}]".format(
+                        #     nx, ny, mpid, mPlayers[mpid].x, mPlayers[mpid].y, mPlayers[mpid].move, ustep + 1
+                        # ))
                         continue
                     vis.add(grab_pair)
+                    record_action[vid] = {"pid": pid,
+                                          "move": umove, "step": ustep+1}
                     q.put((pid, umove, vid, ustep + 1, ulabel))
                 else:
                     if mpair in vis:
                         continue
                     if grab_pair in vis and pid not in used_pid:
-                        mPlayers[pid].move = umove
-                        used_pid.add(pid)
-                        mLogger.info("[我要围捕: ({}, {})] [player: {}; point: ({}, {}); move: {}; dis: {}]".format(
-                            nx, ny, pid, mPlayers[pid].x, mPlayers[pid].y, mPlayers[pid].move, ustep + 1
-                        ))
-                    record_action[vid] = {"pid": pid, "move": umove}
+                        grab_move = record_action[vid]["move"]
+                        grab_step = record_action[vid]["step"]
+                        if grab_move not in used_grab_move:
+                            # mPlayers[pid].move = umove
+                            used_pid.add(pid)
+                            used_grab_move.add(grab_move)
+                            if max_step == None or ustep > max_step:
+                                max_step = ustep
+
+                            ret[pid] = {
+                                "label": "grab",
+                                "my_move": umove,
+                                "enemy_move": grab_move,
+                                "mdis": ustep+1,
+                                "enemy_step": grab_step,
+                                "point": (nx, ny)
+                            }
+
+                            # mLogger.info("[我要围捕: ({}, {})] [player: {}; point: ({}, {}); move: {}; dis: {}]".format(
+                            #     nx, ny, pid, mPlayers[pid].x, mPlayers[pid].y, mPlayers[pid].move, ustep + 1
+                            # ))
                     vis.add(mpair)
+                    record_action[vid] = {"pid": pid,
+                                          "move": umove, "step": ustep+1}
                     q.put((pid, umove, vid, ustep + 1, mlabel))
+
+        near_count = 0
+        left_move_num = tol_dir_num - len(used_grab_move)
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
@@ -514,11 +564,22 @@ class DoThink(Action):
                 continue
             dis, move, cell = self.get_min_dis(
                 player.x, player.y, enemy.predict_x, enemy.predict_y)
-            player.move = move
-            self.record_detial(player, "跳出算法")
+            # player.move = move
+            ret[player.id] = {
+                "label": "near",
+                "my_move": move,
+                "enemy_move": "",
+                "mdis": dis,
+                "enemy_step": "",
+                "point": ""
+            }
+            near_count += 1
+            # self.record_detial(player, "跳出算法")
+
+        return left_move_num, near_count, max_step, ret
 
     def start_grab(self):
-        flag = False
+        result = []
         for k, enemy in othPlayers.iteritems():
             if enemy.visiable == False:
                 continue
@@ -526,14 +587,44 @@ class DoThink(Action):
                 continue
             if enemy.lost_vision_num > self.LIMIT_LOST_VISION:
                 continue
-            if True == self.just_eat(enemy):
-                return True
             mLogger.info("[敌人] [player: {}; point: ({}, {}); predict: ({}, {}); lost: {}]".format(
                 enemy.id, enemy.x, enemy.y, enemy.predict_x, enemy.predict_y, enemy.lost_vision_num
             ))
-            self.bfs(enemy)
-            flag = True
-        return flag
+            if True == self.just_eat(enemy):
+                return True
+            left_move_num, near_count, max_step, ret = self.bfs(enemy)
+            result.append({
+                "left_move_num": left_move_num,
+                "near_count": near_count,
+                "max_step": max_step,
+                "action": ret
+            })
+
+            info = "[left_move_num: {}; near_count: {}; max_step: {}]\n".format(
+                left_move_num, near_count, max_step)
+            for k, v in ret.iteritems():
+                info += "[pid: {}] [{}]\n".format(k, v)
+            mLogger.info(info)
+        if len(result) == 0:
+            return False
+
+        def cmp(l1, l2):
+            if l1['left_move_num'] < l2["left_move_num"]:
+                return -1
+            if l1["left_move_num"] > l2['left_move_num']:
+                return 1
+            if l1['near_count'] < l2['near_count']:
+                return -1
+            if l1['near_count'] > l2['near_count']:
+                return 1
+            if l1['max_step'] < l2['max_step']:
+                return -1
+            return 1
+        result = sorted(result, cmp)
+        best = result[0]
+        mLogger.info("[best: {}]".format(best))
+        for pid, action in best["action"].iteritems():
+            mPlayers[pid].move = action["my_move"]
 
     def eat_power(self, player, used_power):
         powers = self.mRoundObj.msg['msg_data'].get('power', None)
@@ -574,33 +665,67 @@ class DoThink(Action):
 
         all_enums = self.get_all_enums(players)
         max_count, ret_enum = None, None
-
+        now_vision_count = len(self.get_players_vision_set(players))
         for enum in all_enums:
             vision_count = set()
             for pid, em, ex, ey in enum:
-                width, height = mLegStart.width, mLegStart.height
-                vision = mLegStart.msg['msg_data']['map']['vision']
-                # vision = 10
-                x1, y1 = max(0, ex - vision), max(0, ey - vision)
-                x2 = min(width - 1, ex + vision)
-                y2 = min(height - 1, ey + vision)
-
-                for i in range(x1, x2 + 1):
-                    for j in range(y1, y2 + 1):
-                        cell = mLegStart.get_cell_id(i, j)
-                        vision_count.add(cell)
-
-                if max_count == None or len(vision_count) > max_count:
-                    max_count, ret_enum = len(vision_count), enum
-
+                vision_set = self.get_vision_set(ex, ey)
+                vision_count = vision_count.union(vision_set)
+            if max_count == None or len(vision_count) > max_count:
+                max_count, ret_enum = len(vision_count), enum
         if ret_enum == None:
             mLogger.warning("[没有枚举的情况]")
             return
 
-        mLogger.info("[max_count: {}; ret_enum: {}".format(
-            max_count, ret_enum))
-        for pid, em, ex, ey in ret_enum:
-            mPlayers[pid].move = em
+        mLogger.info("[now_vision: {}; enum_max_vision: {}; ret_enum: {}".format(
+            now_vision_count, max_count, ret_enum))
+
+        # vision = mLegStart.msg['msg_data']['map']['vision']
+        # if len(players) == 0:
+        #     k = 0
+        # if len(players) == 1:
+        #     k = 1
+        # if len(players) == 2:
+        #     k = 1.2
+        # if len(players) == 3:
+        #     k = 2
+        # if len(players) == 4:
+        #     k = 3
+
+        # up = ((vision * 2 + 1) ** 2) * k + vision * vision
+        if abs(now_vision_count-max_count) <= 1 and len(players) > 1:
+            # import random
+            # rd = random.random()
+            # direction = ["up", "left", "down", "right"]
+            # move = direction[0]
+            # if rd >= 0.3:
+            #     move = direction[random.randint(0, 3)]
+            # for player in players:
+            #     player.move = move
+
+            def cmp(p1, p2):
+                if p1.x == p2.x:
+                    if p1.y <= p2.y:
+                        return -1
+                    return 1
+                if p1.x <= p2.x:
+                    return -1
+                return 1
+            import random
+            random.shuffle(players)
+            # players = sorted(players, cmp)
+            for index in range(len(players)):
+                if players[index].travel_point != None:
+                    continue
+                nxt = index + 1
+                if index == len(players) - 1:
+                    nxt = 0
+                dis, move, cell = self.get_min_dis(
+                    players[index].x, players[index].y, players[nxt].x, players[nxt].y)
+                players[index].move = move
+        else:
+            for pid, em, ex, ey in ret_enum:
+                mPlayers[pid].move = em
 
     def just_eat(self, enemy):
         uid = mLegStart.get_cell_id(enemy.predict_x, enemy.predict_y)
@@ -612,29 +737,62 @@ class DoThink(Action):
             for k, player in mPlayers.iteritems():
                 if player.sleep == True:
                     continue
-                dis1 = mLegStart.get_short_length(player.x, player.y, x, y)
-                dis2 = mLegStart.get_short_length(x, y, player.x, player.y)
-                if dis1 <= 1 and dis2 <= 1:
+                if player.x == x and player.y == y:
                     return True
-                # if player.x == x and player.y == y:
-                    # return True
             return False
 
+        can_go_num = 0
         for mv, nx, ny in sons:
             if False == have_mplayer(nx, ny):
-                return False
+                can_go_num += 1
+
+        mLogger.info("[can_go_num: {}]".format(can_go_num))
+
+        if can_go_num <= 1:
+            flag = False
+            for mv, nx, ny in sons:
+                if False == have_mplayer(nx, ny):
+                    for k, player in mPlayers.iteritems():
+                        if player.sleep == True:
+                            continue
+                        dis, move, cell = self.get_min_dis(
+                            player.x, player.y, nx, ny)
+                        if dis <= 1:
+                            player.move = move
+                            self.record_detial(player, "直接吃")
+                            flag = True
+                            break
+            if flag == True or can_go_num == 0:
+                for k, player in mPlayers.iteritems():
+                    if player.sleep == True:
+                        continue
+                    dis, move, cell = self.get_min_dis(
+                        player.x, player.y, enemy.predict_x, enemy.predict_y)
+                    if dis <= 1:
+                        player.move = move
+                        self.record_detial(player, "直接吃")
+                        return True
+        return False
+
+        # for k, player in mPlayers.iteritems():
+        #     if player.sleep == True:
+        #         continue
+        #     dis, move, cell = self.get_min_dis(
+        #         player.x, player.y, enemy.predict_x, enemy.predict_y)
+        #     if dis <= 1:
+        #         player.move = move
+        #         return True
+        # return False
+
+    def do_excute(self):
+        alive_num = 0
         for k, player in mPlayers.iteritems():
             if player.sleep == True:
                 continue
-            dis, move, cell = self.get_min_dis(player.x, player.y, enemy.predict_x, enemy.predict_y)
-            # if dis <= 1:
-            player.move = move
-            self.record_detial(player, "逼近")
-            return True
-            # break
-        # return True
-
-    def do_excute(self):
+            alive_num += 1
+        if alive_num <= 2:
+            self.expand_vision()
+            return
         if False == self.start_grab():
             self.expand_vision()
 
