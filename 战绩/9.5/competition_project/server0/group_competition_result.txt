@@ -1,0 +1,5 @@
+#player_id, win_count, total_score
+('725bcd9db2f641cfb1bbfebe8d85f7b4', 3, 1885)
+('05604543518026270f13c015e589a300', 2, 1869)
+('0eccb1bbd93245519710d9e7f8b794d2', 0, 1723)
+('a714cd384a6145b88b7dfacadee8b88b', 1, 1564)

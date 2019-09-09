@@ -105,12 +105,12 @@ venv.bak/
 
 
 # project
-ai/*
-ui/*
-server/*
-log/*
-doc/*
-.vscode
-null
+# ai/*
+# ui/*
+# server/*
+# log/*
+# doc/*
+# .vscode
+# null
 
-battle_test/*
+# battle_test/*

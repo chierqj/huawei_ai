@@ -1,0 +1,7 @@
+['C:\\Users\\StrawberryWang\\Desktop\\huawei_ai\\client\\ballclient\\main.py', '6000', '127.0.0.1', '6001']
+start client....................
+-------------------- battle: 1 --------------------
+[Team: Oth, First: 182, Second: 170, Total: 352]
+[Team: My, First: 304, Second: 291, Total: 595]
+
+[tol_eated: 0, tol_lost_score: 0]
